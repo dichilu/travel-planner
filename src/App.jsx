@@ -1,14 +1,14 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   PlaneTakeoff, MapPin, Calendar, Users, Wallet, Activity, 
   Bed, Train, Coffee, Printer, ExternalLink, AlertCircle, 
   Compass, Ticket, Loader2, Navigation, Image as ImageIcon,
   Car, Info, CheckCircle2, Map, Sparkles, ArrowRight, Clock,
-  Globe, Trash2, RefreshCw, Download, Check, MapPinned
+  Globe, Trash2, RefreshCw, Download, Check, MapPinned, X
 } from 'lucide-react';
 
 // --- 全域應用程式版號 ---
-const APP_VERSION = "v1.21.1 - 修復 Tailwind v4 相容性與樣式加載錯誤";
+const APP_VERSION = "v1.28.0 - 營業時間防呆與誠實 Prompt (Operating Hours Disclaimer)";
 
 const bgImages = {
   "Taiwan": "https://images.unsplash.com/photo-1504233529578-6d46baba6d3f?q=80&w=2000&auto=format&fit=crop",
@@ -22,8 +22,7 @@ const bgImages = {
 
   "Taipei": "https://images.unsplash.com/photo-1470004914212-05527e49370b?q=80&w=2000&auto=format&fit=crop",
   "Tokyo": "https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?q=80&w=2000&auto=format&fit=crop",
-  "Osaka": "https://images.unsplash.com/photo-1590222047805-4c07baf0a30b?q=80&w=2000&auto=format&fit=crop",
-  "Kyoto": "https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?q=80&w=2000&auto=format&fit=crop",
+  "Osaka/Kyoto": "https://images.unsplash.com/photo-1590222047805-4c07baf0a30b?q=80&w=2000&auto=format&fit=crop",
   "Hokkaido": "https://images.unsplash.com/photo-1610483178766-8092dcc6f31f?q=80&w=2000&auto=format&fit=crop",
   "Seoul": "https://images.unsplash.com/photo-1538485399081-7191377e8241?q=80&w=2000&auto=format&fit=crop",
   "Singapore": "https://images.unsplash.com/photo-1525625293386-3f8f99389edd?q=80&w=2000&auto=format&fit=crop",
@@ -76,6 +75,11 @@ const LOCALES_DICT = {
     deleteNode: '刪除',
     confirmDelete: '確認刪除？',
     swapNode: '換一個',
+    swapPrompt: '發生什麼事？想換哪種類型：',
+    swapOpts: { indoor: '躲雨/室內', relax: '太累想休息', food: '找吃喝', any: 'AI 隨機推薦', custom: '✏️ 自己輸入' },
+    customPlh: '想去哪裡？(如: 敘敘苑燒肉)',
+    btnConfirm: '確定',
+    btnCancel: '取消',
     swapping: 'AI 替換中...',
     max3: '已達上限',
     fromHotel: '從飯店出發',
@@ -85,6 +89,11 @@ const LOCALES_DICT = {
     formSec1: '核心行程安排',
     formSec2: '旅客輪廓與預算',
     formSec3: '風格偏好與需求',
+    markDone: '標記完成',
+    actualTime: '完成時間',
+    dominoShift: '自動順延',
+    flightLockWarning: '安全鎖啟動：遇到跨國航班，航班時間已被鎖定無法順延，請留意搭機時間！',
+    estTime: '(AI 預估)',
     options: {
       who: ['情侶', '家族 (有長者與小孩)', '朋友閨蜜', '獨旅'],
       pace: ['慢活 (睡到自然醒，一天1-2點)', '標準 (一天3-4點，含三餐)', '特種兵 (早出晚歸，打卡滿檔)'],
@@ -94,7 +103,7 @@ const LOCALES_DICT = {
     },
     locations: {
       "台灣": ["台北", "桃園", "台中", "台南", "高雄", "花東", "澎湖"],
-      "日本": ["東京", "大阪", "京都", "北海道", "沖繩", "福岡", "名古屋", "仙台"],
+      "日本": ["東京", "大阪/京都", "北海道", "沖繩", "福岡", "名古屋", "仙台"],
       "韓國": ["首爾", "釜山", "濟州島", "大邱"],
       "東南亞": ["曼谷 (泰國)", "清邁 (泰國)", "普吉島 (泰國)", "新加坡", "峇里島 (印尼)", "胡志明市 (越南)", "峴港 (越南)", "吉隆坡 (馬來西亞)", "宿霧 (菲律賓)"],
       "美洲": ["洛杉磯 (美國)", "紐約 (美國)", "舊金山 (美國)", "夏威夷 (美國)", "溫哥華 (加拿大)", "多倫多 (加拿大)"],
@@ -143,6 +152,11 @@ const LOCALES_DICT = {
     deleteNode: 'Remove',
     confirmDelete: 'Confirm?',
     swapNode: 'AI Swap',
+    swapPrompt: 'What kind of alternative?',
+    swapOpts: { indoor: 'Indoor/Rain', relax: 'Need rest', food: 'Food/Drinks', any: 'AI Surprise', custom: '✏️ Specific Place' },
+    customPlh: 'Where to? (e.g., Disney)',
+    btnConfirm: 'OK',
+    btnCancel: 'Cancel',
     swapping: 'Swapping...',
     max3: 'Max Reached',
     fromHotel: 'From Hotel',
@@ -152,6 +166,11 @@ const LOCALES_DICT = {
     formSec1: 'Core Itinerary',
     formSec2: 'Traveler & Budget',
     formSec3: 'Style & Requests',
+    markDone: 'Mark Done',
+    actualTime: 'Actual Finish',
+    dominoShift: 'Auto Shift',
+    flightLockWarning: 'Safety Lock: International flight times are locked and cannot be shifted.',
+    estTime: '(AI Est.)',
     options: {
       who: ['Couples', 'Family (with kids/elders)', 'Friends', 'Solo'],
       pace: ['Relaxed (1-2 spots/day)', 'Standard (3-4 spots/day)', 'Hardcore (Packed schedule)'],
@@ -161,7 +180,7 @@ const LOCALES_DICT = {
     },
     locations: {
       "Taiwan": ["Taipei", "Taoyuan", "Taichung", "Tainan", "Kaohsiung", "Hualien/Taitung", "Penghu"],
-      "Japan": ["Tokyo", "Osaka", "Kyoto", "Hokkaido", "Okinawa", "Fukuoka", "Nagoya", "Sendai"],
+      "Japan": ["Tokyo", "Osaka/Kyoto", "Hokkaido", "Okinawa", "Fukuoka", "Nagoya", "Sendai"],
       "South Korea": ["Seoul", "Busan", "Jeju Island", "Daegu"],
       "Southeast Asia": ["Bangkok (TH)", "Chiang Mai (TH)", "Phuket (TH)", "Singapore", "Bali (ID)", "Ho Chi Minh (VN)", "Da Nang (VN)", "Kuala Lumpur (MY)", "Cebu (PH)"],
       "Americas": ["Los Angeles (US)", "New York (US)", "San Francisco (US)", "Hawaii (US)", "Vancouver (CA)", "Toronto (CA)"],
@@ -210,6 +229,11 @@ const LOCALES_DICT = {
     deleteNode: '削除',
     confirmDelete: '削除しますか？',
     swapNode: 'AIで変更',
+    swapPrompt: 'どんな予定に変更しますか？',
+    swapOpts: { indoor: '雨天/室内', relax: '休憩したい', food: '飲食', any: 'AI ランダム', custom: '✏️ 場所を指定' },
+    customPlh: 'どこへ？ (例: 叙々苑)',
+    btnConfirm: '確定',
+    btnCancel: '取消',
     swapping: '変更中...',
     max3: '上限到達',
     fromHotel: 'ホテルから出発',
@@ -219,6 +243,11 @@ const LOCALES_DICT = {
     formSec1: '旅行の基本情報',
     formSec2: '旅行者と予算',
     formSec3: '旅行のスタイルと要望',
+    markDone: '完了',
+    actualTime: '実際の完了時間',
+    dominoShift: '自動調整',
+    flightLockWarning: '安全ロック：国際線のフライト時間は固定されており、ずらすことはできません。',
+    estTime: '(AI 予想)',
     options: {
       who: ['カップル', '家族 (子供・シニア同伴)', '友人同士', '一人旅'],
       pace: ['のんびり (1日1-2箇所)', 'スタンダード (1日3-4箇所)', 'ハード (予定詰め込み)'],
@@ -228,7 +257,7 @@ const LOCALES_DICT = {
     },
     locations: {
       "台灣": ["台北", "桃園", "台中", "台南", "高雄", "花東", "澎湖"],
-      "日本": ["東京", "大阪", "京都", "北海道", "沖縄", "福岡", "名古屋", "仙台"],
+      "日本": ["東京", "大阪/京都", "北海道", "沖縄", "福岡", "名古屋", "仙台"],
       "韓國": ["ソウル", "釜山", "済州島", "大邱"],
       "東南亞": ["バンコク (タイ)", "チェンマイ (タイ)", "プーケット (タイ)", "シンガポール", "バリ島 (インドネシア)", "ホーチミン (ベトナム)", "ダナン (ベトナム)", "クアラルンプール (マレーシア)", "セブ (フィリピン)"],
       "北米": ["ロサンゼルス (米国)", "ニューヨーク (米国)", "サンフランシスコ (米国)", "ハワイ (米国)", "バンクーバー (カナダ)", "トロント (カナダ)"],
@@ -254,16 +283,40 @@ const renderText = (val) => {
   return String(val);
 };
 
+const loadSavedState = () => {
+  try {
+    const saved = localStorage.getItem('itinerary_master_state');
+    if (saved) return JSON.parse(saved);
+  } catch (e) {}
+  return null;
+};
+
+// --- 時間運算工具 ---
+const timeToMins = (timeStr) => {
+  if (!timeStr) return 0;
+  const [h, m] = timeStr.split(':').map(Number);
+  return h * 60 + m;
+};
+
+const minsToTime = (mins) => {
+  let h = Math.floor(mins / 60) % 24;
+  let m = mins % 60;
+  if (h < 0) h += 24; 
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+};
+
 export default function App() {
+  const savedState = loadSavedState();
+  
   const today = new Date().toISOString().split('T')[0];
   const nextWeek = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0];
 
-  const [lang, setLang] = useState('zh-TW');
+  const [lang, setLang] = useState(savedState?.lang || 'zh-TW');
   const t = LOCALES_DICT[lang];
   const locs = t.locations;
   const pdfRef = useRef(null);
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState(savedState?.formData || {
     who: t.options.who[0], 
     why: [t.options.why[5]],
     destCountry: '日本', destCity: '東京',
@@ -273,20 +326,36 @@ export default function App() {
     special: ''
   });
 
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState(savedState?.step || 1);
   const [errorMsg, setErrorMsg] = useState('');
   const [isPdfLoading, setIsPdfLoading] = useState(false);
   
-  const [logisticsData, setLogisticsData] = useState(null);
-  const [selectedFlight, setSelectedFlight] = useState(0);
-  const [selectedHotel, setSelectedHotel] = useState(0);
-  const [itinerary, setItinerary] = useState(null);
+  const [logisticsData, setLogisticsData] = useState(savedState?.logisticsData || null);
+  const [selectedFlight, setSelectedFlight] = useState(savedState?.selectedFlight || 0);
+  const [selectedHotel, setSelectedHotel] = useState(savedState?.selectedHotel || 0);
+  const [itinerary, setItinerary] = useState(savedState?.itinerary || null);
   
-  // 狀態管理：記錄正在進行刪除確認的節點，以及正在 AI 替換的節點
   const [swappingNode, setSwappingNode] = useState(null);
   const [deletingNode, setDeletingNode] = useState(null);
+  const [swapMenuOpenFor, setSwapMenuOpenFor] = useState(null); 
+  const [showCustomInputFor, setShowCustomInputFor] = useState(null); 
+  const [customSwapText, setCustomSwapText] = useState(''); 
 
-  // --- 【底層引擎】單一真理英文索引 ---
+  useEffect(() => {
+    const stateToSave = { lang, formData, step, logisticsData, selectedFlight, selectedHotel, itinerary };
+    localStorage.setItem('itinerary_master_state', JSON.stringify(stateToSave));
+  }, [lang, formData, step, logisticsData, selectedFlight, selectedHotel, itinerary]);
+
+  const handleReset = () => {
+    if(step === 1 && !itinerary && !logisticsData) return;
+    localStorage.removeItem('itinerary_master_state');
+    setStep(1);
+    setLogisticsData(null);
+    setItinerary(null);
+    setSelectedFlight(0);
+    setSelectedHotel(0);
+  };
+
   const getEnglishKeys = () => {
     try {
       const currentLocs = LOCALES_DICT[lang].locations;
@@ -364,7 +433,7 @@ export default function App() {
   };
 
   const callGemini = async (prompt, systemInstruction, retryCount = 0) => {
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY; 
+    const apiKey = ""; 
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
     try {
       const response = await fetch(url, {
@@ -399,16 +468,13 @@ export default function App() {
     const sysInst = `Output STRICTLY a JSON object with two arrays. YOU MUST RETURN EXACTLY 3 ITEMS IN EACH ARRAY. DO NOT RETURN ONLY 1.
       CRITICAL MANDATE: All textual content MUST be written in ${targetLangStr}.
       CRITICAL MANDATE: All price strings MUST include appropriate currency symbols.
+      JSON SCHEMA TO FOLLOW:
       {
         "flightOptions": [
-          {"airline":"Airline 1", "outbound":"08:00 TPE -> 11:30 KIX", "inbound":"13:00 KIX -> 15:00 TPE", "priceEstimate":"Estimated ROUND-TRIP Price with currency"},
-          {"airline":"...", "outbound":"...", "inbound":"...", "priceEstimate":"..."},
-          {"airline":"...", "outbound":"...", "inbound":"...", "priceEstimate":"..."}
+          {"airline":"<String: Airline Name>", "outbound":"<String: HH:MM Origin -> HH:MM Dest>", "inbound":"<String: HH:MM Dest -> HH:MM Origin>", "priceEstimate":"<String: Price with currency>"}
         ],
         "hotelOptions": [
-          {"name":"Hotel 1", "reason":"...", "pricePerNight":"Price with currency", "officialLink":"Booking link"},
-          {"name":"...", "reason":"...", "pricePerNight":"...", "officialLink":"..."},
-          {"name":"...", "reason":"...", "pricePerNight":"...", "officialLink":"..."}
+          {"name":"<String: Hotel Name>", "reason":"<String: Why recommend this>", "pricePerNight":"<String: Price with currency>", "officialLink":"<String: Booking link URL or empty>"}
         ]
       }`;
     
@@ -423,42 +489,67 @@ export default function App() {
   const handleGenerateItinerary = async () => {
     setStep(4); setErrorMsg('');
     const cf = logisticsData.flightOptions[selectedFlight], ch = logisticsData.hotelOptions[selectedHotel];
-    const prompt = `${getDepartureStr()} to ${getDestinationStr()} (${calculateDays()} days). Pace: ${formData.pace}. Styles: ${formData.why.join(' AND ')}. Flight: ${cf.airline} (${cf.outbound} / ${cf.inbound}). Hotel: ${ch.name}.`;
+    const prompt = `${getDepartureStr()} to ${getDestinationStr()} (${calculateDays()} days). Pace: ${formData.pace}. Styles: ${formData.why.join(' AND ')}. Transit: ${formData.transit}. Special Notes: ${formData.special}. Flight: ${cf.airline} (${cf.outbound} / ${cf.inbound}). Hotel: ${ch.name}.`;
     
-    const sysInst = `Output STRICT JSON. 
+    // 🚀 核心大腦升級: 加入營業時間誠實條款 (Honest Operating Hours)
+    const sysInst = `You are an elite, practical Local Expert Tour Guide. Output STRICT JSON. 
       CRITICAL MANDATE: All generated text MUST be entirely in ${targetLangStr}.
-      CRITICAL MANDATE: Make sure 'costEstimate' includes the appropriate currency symbol.
-      CRITICAL MANDATE - BOUNDARY EVENTS:
-      1. Day 1, Activity 1 MUST be the Outbound Flight.
-      2. Day 1, Activity 2 MUST be type="transit" representing the journey from the destination airport to the Hotel/City.
-      3. The SECOND TO LAST activity on the LAST day MUST be type="transit" representing the journey from Hotel/City to the destination airport.
-      4. The LAST activity on the LAST day MUST be the Inbound Flight.
-      Rule: 3 meals/day. 
+      CRITICAL MANDATE: 'costEstimate' MUST include the appropriate currency symbol.
+      CRITICAL MANDATE: You MUST generate EXACTLY ${calculateDays()} days in the "dailyPlan" array. DO NOT just output 1 day.
+      
+      --- 🛑 CORE EXPERT LOGIC & CONSTRAINTS 🛑 ---
+      1. GEO-CLUSTERING (IMPORTANT): If the destination covers multiple cities or a large region (e.g., "Osaka/Kyoto" or "Tokyo"), YOU MUST GROUP consecutive days by area. DO NOT cross city or distant regional borders back-and-forth within the same day. Example: Day 1-2 Kyoto, Day 3-5 Osaka.
+      2. TIME-PHYSICS ENGINE: You MUST leave realistic time gaps between activities for transportation and actual enjoyment based on the user's pace ("${formData.pace}"). DO NOT schedule back-to-back activities with 0 transit time unless they are literally in the same building.
+      3. LOGISTICAL DEPTH: In "detailedInstruction", YOU MUST provide exact transit methods. State the specific train/subway lines to take, exits to use, or realistic walking times. No generic fluff.
+      4. MEALS: Schedule 3 meals (type: "food") every single day at culturally appropriate times.
+      5. HONEST OPERATING HOURS: For "operatingHours", if it's a known 24-hour place (e.g., Ichiran Ramen, Don Quijote, convenience stores, parks, airports), explicitly output "24小時營業" or "24 Hours". If you are NOT 100% certain about the exact hours, output "建議出發前至地圖或官網確認" instead of faking hours.
+
+      --- 🛑 BOUNDARY EVENTS 🛑 ---
+      1. Day 1, Activity 1 MUST be the Outbound Flight (Airline: ${cf.airline}, Time: ${cf.outbound}).
+      2. Day 1, Activity 2 MUST be type="transit" representing the realistic journey from the destination airport to the Hotel (${ch.name}).
+      3. The SECOND TO LAST activity on the LAST day MUST be type="transit" representing the realistic journey from Hotel/City to the destination airport.
+      4. The LAST activity on the LAST day MUST be the Inbound Flight (Airline: ${cf.airline}, Time: ${cf.inbound}).
+      
+      JSON SCHEMA TO FOLLOW:
       {
-        "summary":"...", 
+        "summary":"<String: Overall 50-word summary emphasizing the flow and clustering>", 
         "budgetAnalysisPerPerson":{
-          "flight": 15000, "hotel": 8000, "food": 5000, "transport": 2000, "tickets": 3000, "total": 33000
+          "flight": <Integer: purely number>, "hotel": <Integer>, "food": <Integer>, "transport": <Integer>, "tickets": <Integer>, "total": <Integer>
         }, 
-        "recommendedPasses":[{"passName":"", "reason":"", "buyLink":""}], 
-        "dailyPlan":[{"day":1,"date":"","theme":"","activities":[{"time":"08:00","type":"food","location":"","operatingHours":"","detailedInstruction":"80+ words","expertReason":"50+ words","officialLink":"","costEstimate":"Cost with currency symbol"}]}]
+        "recommendedPasses":[{"passName":"<String>", "reason":"<String>", "buyLink":"<String: URL or empty>"}], 
+        "dailyPlan":[
+          {
+            "day": <Integer: Day number>,
+            "date":"<String: YYYY-MM-DD>",
+            "theme":"<String: Daily theme emphasizing the clustered area>",
+            "activities":[
+              {
+                "time":"<String: HH:MM>",
+                "type":"<String: 'food', 'attraction', 'transit', or 'hotel'>",
+                "location":"<String: Exact Location Name>",
+                "operatingHours":"<String: Honest operating hours or 24h indication>",
+                "detailedInstruction":"<String: Detailed action and EXACT routing/transit guide, 80+ words>",
+                "expertReason":"<String: Why this makes sense in the current geographic cluster, 50+ words>",
+                "officialLink":"<String: URL or empty>",
+                "costEstimate":"<String: Cost with currency symbol>"
+              }
+            ]
+          }
+        ]
       }
       CRITICAL: All values in budgetAnalysisPerPerson MUST BE INTEGERS. NO COMMAS, NO CURRENCY SYMBOLS.`;
+      
     try {
       setItinerary(await callGemini(prompt, sysInst));
       setStep(5);
     } catch (e) { setErrorMsg('API Error: Timeout or format error.'); setStep(3); }
   };
 
-  // --- 【核心修復】雙擊防護型刪除與自由時間降級 ---
   const handleDeleteNode = (dayIdx, actIdx) => {
     const nodeKey = `${dayIdx}-${actIdx}`;
-    
-    // 若處於確認刪除狀態，則執行轉換為自由時間
     if (deletingNode === nodeKey) {
       const newItin = { ...itinerary };
       const currentAct = newItin.dailyPlan[dayIdx].activities[actIdx];
-      
-      // 保留原本的時間點，將節點優雅降級為自由時間，防止時間軸斷層
       newItin.dailyPlan[dayIdx].activities[actIdx] = {
         time: currentAct.time,
         type: 'freetime',
@@ -469,32 +560,63 @@ export default function App() {
         expertReason: '',
         officialLink: ''
       };
-      
       setItinerary(newItin);
       setDeletingNode(null);
     } else {
-      // 觸發第一次點擊：進入確認狀態
       setDeletingNode(nodeKey);
-      // 3秒後自動取消確認狀態
       setTimeout(() => {
         setDeletingNode(current => current === nodeKey ? null : current);
       }, 3000);
     }
   };
 
-  const handleSwapNode = async (dayIdx, actIdx) => {
-    setSwappingNode(`${dayIdx}-${actIdx}`);
+  const handleSwapNode = async (dayIdx, actIdx, intent, customInput = '') => {
+    setSwapMenuOpenFor(null); 
+    setShowCustomInputFor(null);
+    setCustomSwapText(''); 
+    setSwappingNode(`${dayIdx}-${actIdx}`); 
+    
     const day = itinerary.dailyPlan[dayIdx];
     const targetAct = day.activities[actIdx];
     const prevAct = actIdx > 0 ? renderText(day.activities[actIdx - 1].location) : "Start of day";
     const nextAct = actIdx < day.activities.length - 1 ? renderText(day.activities[actIdx + 1].location) : "End of day";
 
+    let intentContext = "USER INTENT: Provide a good general alternative that fits the geographic flow of this day.";
+    let targetType = targetAct.type === 'transit' ? 'attraction' : targetAct.type;
+
+    if (intent === 'indoor') {
+      intentContext = "USER INTENT: The user specifically requested an INDOOR or RAINY DAY BACKUP activity. Must be weather-proof and geographically nearby.";
+      targetType = 'attraction';
+    } else if (intent === 'relax') {
+      intentContext = "USER INTENT: The user is tired and specifically requested a very RELAXING, low-physical-effort activity nearby.";
+      targetType = 'attraction';
+    } else if (intent === 'food') {
+      intentContext = "USER INTENT: The user specifically requested a FOOD or BEVERAGE stop in the current vicinity.";
+      targetType = 'food';
+    } else if (intent === 'custom' && customInput.trim()) {
+      intentContext = `USER INTENT: The user explicitly requested to go to exactly this location/activity: "${customInput}". You MUST set the location to this requested place (or its closest realistic equivalent), calculate the transit, and provide details. If geographically absurd based on the current cluster, explain why in 'expertReason'.`;
+      targetType = 'attraction'; 
+    }
+
     const prompt = `City: ${getDestinationStr()}. Context: Day ${day.day}. Previous: ${prevAct}. Next: ${nextAct}. Styles: ${formData.why.join(', ')}.
-      Do NOT go to "${renderText(targetAct.location)}" at ${targetAct.time}. Suggest ONE alternative activity (type: ${targetAct.type === 'transit' ? 'attraction' : targetAct.type}).`;
+      Do NOT go to "${renderText(targetAct.location)}" at ${targetAct.time}.
+      ${intentContext}
+      Suggest ONE alternative activity (type: ${targetType}). Ensure realistic transit physics.`;
 
     const sysInst = `Output ONLY a single JSON object. 
       CRITICAL MANDATE: Output MUST be entirely in ${targetLangStr}.
-      {"time":"${targetAct.time}", "type":"${targetAct.type}", "location":"Alternative Name", "operatingHours":"...", "detailedInstruction":"80+ words", "expertReason":"50+ words", "officialLink":"", "costEstimate":""}`;
+      CRITICAL MANDATE: For "operatingHours", if it's a 24-hour place, explicitly output "24小時營業" or "24 Hours". If unsure, output "建議至官網或地圖確認" instead of making up fake hours.
+      JSON SCHEMA TO FOLLOW:
+      {
+        "time":"${targetAct.time}", 
+        "type":"${targetType}", 
+        "location":"<String: Alternative Name>", 
+        "operatingHours":"<String: Honest hours or 24h indication>", 
+        "detailedInstruction":"<String: 80+ words instruction with transit details>", 
+        "expertReason":"<String: 50+ words insights>", 
+        "officialLink":"<String: URL or empty>", 
+        "costEstimate":"<String: Cost with currency>"
+      }`;
 
     try {
       const newActivity = await callGemini(prompt, sysInst);
@@ -505,8 +627,66 @@ export default function App() {
       alert(lang === 'zh-TW' ? "AI 替換失敗，請再試一次。" : "Swap failed. Try again.");
     } finally {
       setSwappingNode(null);
-      setDeletingNode(null); // 如果剛好在刪除狀態，清除它
+      setDeletingNode(null); 
     }
+  };
+
+  // --- 【一鍵自動同步引擎 (Auto-Sync Domino Engine)】 ---
+  const handleShiftFromNode = (dayIdx, actIdx, shiftMins) => {
+    const newItin = { ...itinerary };
+    const day = newItin.dailyPlan[dayIdx];
+    
+    if (day.activities[actIdx].actualEndTime) {
+       day.activities[actIdx].actualEndTime = minsToTime(timeToMins(day.activities[actIdx].actualEndTime) + shiftMins);
+    }
+
+    for (let i = actIdx + 1; i < day.activities.length; i++) {
+      const nextAct = day.activities[i];
+      const isBoundary = (dayIdx === 0 && i === 0) || (dayIdx === itinerary.dailyPlan.length - 1 && i === day.activities.length - 1);
+      
+      if (isBoundary) {
+        alert(t.flightLockWarning);
+        break; 
+      }
+      
+      if (nextAct.time) {
+        nextAct.time = minsToTime(timeToMins(nextAct.time) + shiftMins);
+      }
+      if (nextAct.actualEndTime) {
+        nextAct.actualEndTime = minsToTime(timeToMins(nextAct.actualEndTime) + shiftMins);
+      }
+    }
+    setItinerary(newItin);
+  };
+
+  const handleActualTimeChange = (dayIdx, actIdx, newTime) => {
+    const act = itinerary.dailyPlan[dayIdx].activities[actIdx];
+    const oldTime = act.actualEndTime;
+
+    if (oldTime && newTime) {
+      let diffMins = timeToMins(newTime) - timeToMins(oldTime);
+      if (diffMins < -720) diffMins += 1440;
+      if (diffMins > 720) diffMins -= 1440;
+      if (diffMins !== 0) handleShiftFromNode(dayIdx, actIdx, diffMins);
+    }
+  };
+
+  const handleToggleComplete = (dayIdx, actIdx) => {
+    const newItin = { ...itinerary };
+    const act = newItin.dailyPlan[dayIdx].activities[actIdx];
+    act.isCompleted = !act.isCompleted;
+    
+    if (act.isCompleted && !act.actualEndTime) {
+      const nextAct = newItin.dailyPlan[dayIdx].activities[actIdx + 1];
+      if (nextAct && nextAct.time) {
+          act.actualEndTime = nextAct.time; 
+      } else if (act.time) {
+          act.actualEndTime = minsToTime(timeToMins(act.time) + 60); 
+      } else {
+          act.actualEndTime = "12:00"; 
+      }
+    }
+    setItinerary(newItin);
   };
 
   const handleDownloadPDF = () => {
@@ -537,8 +717,6 @@ export default function App() {
   const getRouteUrl = (dayIdx, actIdx, activities, hotelName) => {
     if (dayIdx === 0 && actIdx === 0) return null; 
     if (dayIdx === itinerary.dailyPlan.length - 1 && actIdx === activities.length - 1) return null;
-    
-    // 如果當前節點是自由活動，不提供具體的導航路線
     if (activities[actIdx].type === 'freetime') return null;
 
     let origin = '';
@@ -579,7 +757,6 @@ export default function App() {
             const currentSrc = e.target.src;
             const countryUrl = bgImages[enKeys.country];
             const defaultUrl = bgImages['default'];
-
             if (countryUrl && currentSrc !== countryUrl && currentSrc !== defaultUrl) {
               e.target.src = countryUrl;
             } else if (currentSrc !== defaultUrl) {
@@ -601,7 +778,7 @@ export default function App() {
             </div>
             <div>
               <div className="flex items-center gap-3">
-                <h1 className="text-3xl font-extrabold text-white tracking-tight cursor-pointer drop-shadow-md" onClick={() => setStep(1)}>{t.title}</h1>
+                <h1 className="text-3xl font-extrabold text-white tracking-tight cursor-pointer drop-shadow-md" onClick={handleReset}>{t.title}</h1>
                 <span className="bg-white/20 backdrop-blur-sm text-white text-[10px] font-bold px-2.5 py-1 rounded-full border border-white/30 shadow-sm whitespace-nowrap">{APP_VERSION.split(' - ')[0]}</span>
               </div>
               <p className="text-sm font-medium text-blue-100 mt-0.5 tracking-wide drop-shadow-md">{t.subtitle}</p>
@@ -623,7 +800,6 @@ export default function App() {
 
       <main className="max-w-5xl mx-auto p-4 md:px-8 pb-24 relative z-10">
         
-        {/* --- 【全新視覺重構】模組化卡片群組表單 --- */}
         {step === 1 && (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-8">
             <div className="bg-white/80 backdrop-blur-xl p-8 md:p-10 rounded-[2rem] shadow-[0_10px_40px_-10px_rgba(0,0,0,0.3)] border border-white/50 print:hidden text-center">
@@ -657,8 +833,6 @@ export default function App() {
               </div>
               
               <form onSubmit={handleFetchLogistics} className="p-8 md:p-10 space-y-10">
-                
-                {/* --- 區塊 1：核心行程安排 --- */}
                 <div className="bg-slate-50/50 p-6 md:p-8 rounded-3xl border border-slate-100 shadow-sm space-y-6">
                   <h3 className="text-lg font-black text-indigo-900 flex items-center gap-2 mb-2"><MapPin className="w-5 h-5 text-indigo-500"/> {t.formSec1}</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -697,7 +871,6 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* --- 區塊 2：旅客輪廓與預算 --- */}
                 <div className="bg-slate-50/50 p-6 md:p-8 rounded-3xl border border-slate-100 shadow-sm space-y-6">
                   <h3 className="text-lg font-black text-indigo-900 flex items-center gap-2 mb-2"><Users className="w-5 h-5 text-indigo-500"/> {t.formSec2}</h3>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -716,7 +889,6 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* --- 區塊 3：風格偏好與需求 --- */}
                 <div className="bg-slate-50/50 p-6 md:p-8 rounded-3xl border border-slate-100 shadow-sm space-y-6">
                   <h3 className="text-lg font-black text-indigo-900 flex items-center gap-2 mb-2"><Compass className="w-5 h-5 text-indigo-500"/> {t.formSec3}</h3>
                   <div className="space-y-3">
@@ -827,7 +999,6 @@ export default function App() {
           </div>
         )}
 
-        {/* STEP 5: 最終深度行程呈現 */}
         {step === 5 && itinerary && (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-8">
             <div className="flex flex-wrap justify-between items-center gap-4 print:hidden px-2">
@@ -839,22 +1010,22 @@ export default function App() {
 
             <div ref={pdfRef} className="space-y-8 print:bg-white print:p-0">
               
-              <div className="bg-gradient-to-br from-indigo-900/95 via-slate-900/95 to-blue-900/95 backdrop-blur-2xl p-8 md:p-12 rounded-[2.5rem] shadow-2xl text-white relative overflow-hidden print:bg-slate-900 print:text-white print:break-inside-avoid border border-white/10">
+              <div className="bg-gradient-to-br from-indigo-900/95 via-slate-900/95 to-blue-900/95 backdrop-blur-2xl p-6 md:p-12 rounded-[2.5rem] shadow-2xl text-white relative overflow-hidden print:bg-slate-900 print:text-white print:break-inside-avoid border border-white/10">
                 <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none"><Compass className="w-64 h-64" /></div>
                 <div className="relative z-10">
                   <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-md text-white font-bold px-5 py-2.5 rounded-full text-sm mb-6 border border-white/30 shadow-sm">
                     <Calendar className="w-4 h-4" /> {formData.dateFrom} - {formData.dateTo} ({calculateDays()} Days)
                   </div>
-                  <h2 className="text-4xl md:text-5xl font-black mb-5 tracking-tight leading-tight text-transparent bg-clip-text bg-gradient-to-r from-blue-200 via-white to-indigo-100 drop-shadow-sm">
+                  <h2 className="text-3xl md:text-5xl font-black mb-5 tracking-tight leading-tight text-transparent bg-clip-text bg-gradient-to-r from-blue-200 via-white to-indigo-100 drop-shadow-sm">
                     {formData.destCity} {t.dailyPlan}
                   </h2>
-                  <p className="text-lg md:text-xl text-blue-50 font-medium mb-10 max-w-3xl leading-relaxed border-l-4 border-blue-400 pl-5">
+                  <p className="text-base md:text-xl text-blue-50 font-medium mb-10 max-w-3xl leading-relaxed border-l-4 border-blue-400 pl-4 md:pl-5">
                     {renderText(itinerary.summary)}
                   </p>
 
                   {logisticsData && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5 print:grid-cols-2">
-                      <div className="bg-white/10 backdrop-blur-xl p-6 rounded-3xl border border-white/20 shadow-inner">
+                      <div className="bg-white/10 backdrop-blur-xl p-5 md:p-6 rounded-3xl border border-white/20 shadow-inner">
                         <div className="flex items-center gap-2 text-blue-200 mb-3"><PlaneTakeoff className="w-5 h-5"/> <span className="font-bold uppercase tracking-wider text-xs">Confirmed Flight</span></div>
                         <p className="font-black text-white text-xl">{renderText(logisticsData.flightOptions[selectedFlight]?.airline)}</p>
                         <div className="mt-3 space-y-1.5">
@@ -864,7 +1035,7 @@ export default function App() {
                         </div>
                         <a href={getGoogleFlightsUrl()} target="_blank" rel="noreferrer" className="inline-flex mt-4 text-xs font-bold bg-blue-500/40 hover:bg-blue-500/60 px-4 py-2 rounded-xl transition-colors border border-blue-400/50 print:hidden">{t.flightGoogle}</a>
                       </div>
-                      <div className="bg-white/10 backdrop-blur-xl p-6 rounded-3xl border border-white/20 shadow-inner">
+                      <div className="bg-white/10 backdrop-blur-xl p-5 md:p-6 rounded-3xl border border-white/20 shadow-inner">
                         <div className="flex items-center gap-2 text-pink-200 mb-3"><Bed className="w-5 h-5"/> <span className="font-bold uppercase tracking-wider text-xs">Confirmed Hotel</span></div>
                         <p className="font-black text-white text-xl">{renderText(logisticsData.hotelOptions[selectedHotel]?.name)}</p>
                         <p className="text-sm text-blue-50/90 mt-3 leading-relaxed">{renderText(logisticsData.hotelOptions[selectedHotel]?.reason)}</p>
@@ -878,12 +1049,12 @@ export default function App() {
               </div>
 
               {itinerary.budgetAnalysisPerPerson && (
-                <div className="bg-white/90 backdrop-blur-2xl p-8 md:p-10 rounded-[2.5rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.3)] border border-white print:border-2 print:border-slate-800">
+                <div className="bg-white/90 backdrop-blur-2xl p-6 md:p-10 rounded-[2.5rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.3)] border border-white print:border-2 print:border-slate-800">
                   <div className="flex items-center justify-between mb-8">
-                    <h3 className="text-2xl font-black text-slate-800 flex items-center gap-3"><Wallet className="w-7 h-7 text-green-500" /> {t.budgetTitle}</h3>
+                    <h3 className="text-xl md:text-2xl font-black text-slate-800 flex items-center gap-3"><Wallet className="w-6 h-6 md:w-7 md:h-7 text-green-500" /> {t.budgetTitle}</h3>
                     <div className="text-right">
-                      <p className="text-sm font-bold text-slate-500 uppercase tracking-wider">{t.budgetTotal}</p>
-                      <p className="text-4xl font-black text-indigo-600 drop-shadow-sm">{formatCurrency(safeNum(itinerary.budgetAnalysisPerPerson.total))}</p>
+                      <p className="text-xs md:text-sm font-bold text-slate-500 uppercase tracking-wider">{t.budgetTotal}</p>
+                      <p className="text-2xl md:text-4xl font-black text-indigo-600 drop-shadow-sm">{formatCurrency(safeNum(itinerary.budgetAnalysisPerPerson.total))}</p>
                     </div>
                   </div>
                   <div className="w-full h-5 bg-slate-100 rounded-full overflow-hidden flex shadow-inner mb-8">
@@ -893,7 +1064,7 @@ export default function App() {
                     <div className="bg-indigo-400 h-full" style={{ width: `${(safeNum(itinerary.budgetAnalysisPerPerson.tickets) / (safeNum(itinerary.budgetAnalysisPerPerson.total)||1)) * 100}%` }}></div>
                     <div className="bg-slate-400 h-full" style={{ width: `${(safeNum(itinerary.budgetAnalysisPerPerson.transport) / (safeNum(itinerary.budgetAnalysisPerPerson.total)||1)) * 100}%` }}></div>
                   </div>
-                  <div className="grid grid-cols-2 md:grid-cols-5 gap-6 text-sm font-medium">
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-4 md:gap-6 text-sm font-medium">
                     <div className="flex flex-col bg-white/80 p-3 rounded-xl border border-slate-100"><span className="text-blue-500 flex items-center gap-1.5 mb-1"><PlaneTakeoff className="w-4 h-4"/>Flight</span> <span className="text-slate-800 font-bold text-lg">{formatCurrency(safeNum(itinerary.budgetAnalysisPerPerson.flight))}</span></div>
                     <div className="flex flex-col bg-white/80 p-3 rounded-xl border border-slate-100"><span className="text-pink-500 flex items-center gap-1.5 mb-1"><Bed className="w-4 h-4"/>Hotel</span> <span className="text-slate-800 font-bold text-lg">{formatCurrency(safeNum(itinerary.budgetAnalysisPerPerson.hotel))}</span></div>
                     <div className="flex flex-col bg-white/80 p-3 rounded-xl border border-slate-100"><span className="text-orange-500 flex items-center gap-1.5 mb-1"><Coffee className="w-4 h-4"/>Food</span> <span className="text-slate-800 font-bold text-lg">{formatCurrency(safeNum(itinerary.budgetAnalysisPerPerson.food))}</span></div>
@@ -904,13 +1075,13 @@ export default function App() {
               )}
 
               {itinerary.recommendedPasses && itinerary.recommendedPasses.length > 0 && (
-                <div className="bg-gradient-to-r from-indigo-50/95 to-blue-50/95 backdrop-blur-2xl p-8 md:p-10 rounded-[2.5rem] border border-white shadow-xl print:hidden">
+                <div className="bg-gradient-to-r from-indigo-50/95 to-blue-50/95 backdrop-blur-2xl p-6 md:p-10 rounded-[2.5rem] border border-white shadow-xl print:hidden">
                   <h3 className="text-xl font-black text-indigo-900 flex items-center gap-3 mb-6">
                     <Ticket className="w-6 h-6 text-indigo-600" /> Recommended Passes
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     {itinerary.recommendedPasses.map((pass, idx) => (
-                      <div key={idx} className="bg-white p-6 rounded-3xl shadow-sm border border-white hover:shadow-md transition-shadow">
+                      <div key={idx} className="bg-white p-5 md:p-6 rounded-3xl shadow-sm border border-white hover:shadow-md transition-shadow">
                         <h4 className="font-black text-slate-800 text-lg mb-2">{renderText(pass.passName)}</h4>
                         <p className="text-sm text-slate-600 mb-5 font-medium leading-relaxed">{renderText(pass.reason)}</p>
                         {pass.buyLink && (
@@ -924,26 +1095,25 @@ export default function App() {
                 </div>
               )}
 
-              <div className="space-y-10">
+              <div className="space-y-8 md:space-y-10">
                 {itinerary.dailyPlan?.map((day, idx) => (
                   <div key={idx} className="bg-white/90 backdrop-blur-2xl rounded-[2.5rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.3)] border border-white/80 overflow-hidden print:border-2 print:border-slate-300 print:break-inside-avoid print:shadow-none print:mt-4">
                     
-                    <div className="bg-slate-900/95 p-8 flex flex-col md:flex-row md:items-center justify-between gap-4 print:bg-slate-100">
-                      <div className="flex items-center gap-5">
-                        <div className="bg-indigo-500 text-white font-black text-2xl w-16 h-16 flex items-center justify-center rounded-[1.5rem] shadow-lg print:bg-indigo-100 print:text-indigo-900 print:border print:border-indigo-300">D{day.day}</div>
+                    <div className="bg-slate-900/95 p-6 md:p-8 flex flex-col md:flex-row md:items-center justify-between gap-4 print:bg-slate-100">
+                      <div className="flex items-center gap-4 md:gap-5">
+                        <div className="bg-indigo-500 text-white font-black text-xl md:text-2xl w-14 h-14 md:w-16 md:h-16 flex items-center justify-center rounded-[1.25rem] md:rounded-[1.5rem] shadow-lg print:bg-indigo-100 print:text-indigo-900 print:border print:border-indigo-300">D{day.day}</div>
                         <div>
-                          <p className="text-indigo-200 font-bold text-sm tracking-widest print:text-slate-500 uppercase">{day.date}</p>
-                          <h3 className="font-black text-white text-3xl tracking-tight mt-1 print:text-slate-900">{renderText(day.theme)}</h3>
+                          <p className="text-indigo-200 font-bold text-xs md:text-sm tracking-widest print:text-slate-500 uppercase">{day.date}</p>
+                          <h3 className="font-black text-white text-2xl md:text-3xl tracking-tight mt-1 print:text-slate-900">{renderText(day.theme)}</h3>
                         </div>
                       </div>
                     </div>
                     
-                    <div className="p-6 md:p-10 relative">
-                      <div className="absolute left-[65px] top-10 bottom-10 w-1 bg-slate-200/60 z-0 hidden md:block print:block rounded-full"></div>
+                    <div className="p-4 sm:p-6 md:p-10 relative">
+                      <div className="absolute left-[45px] sm:left-[55px] md:left-[65px] top-10 bottom-10 w-1 bg-slate-200/60 z-0 hidden md:block print:block rounded-full"></div>
                       
-                      <div className="space-y-12 relative z-10">
+                      <div className="space-y-8 md:space-y-12 relative z-10">
                         {day.activities?.map((act, actIdx) => {
-                          // 動態判定 Icon 與主題色
                           let Icon = MapPin;
                           let iconTheme = "text-indigo-600 bg-indigo-100 border-indigo-200";
                           if (act.type === 'food') { Icon = Coffee; iconTheme = "text-orange-600 bg-orange-100 border-orange-200"; }
@@ -952,6 +1122,8 @@ export default function App() {
                           if (act.type === 'freetime') { Icon = Clock; iconTheme = "text-teal-600 bg-teal-100 border-teal-200"; }
 
                           const isThisNodeSwapping = swappingNode === `${idx}-${actIdx}`;
+                          const isMenuOpen = swapMenuOpenFor === `${idx}-${actIdx}`;
+                          const isCustomInputOpen = showCustomInputFor === `${idx}-${actIdx}`;
                           const isBoundaryNode = (idx === 0 && actIdx === 0) || (idx === itinerary.dailyPlan.length - 1 && actIdx === day.activities.length - 1);
                           const isFreeTime = act.type === 'freetime';
                           
@@ -959,29 +1131,29 @@ export default function App() {
                           const originText = getOriginText(idx, actIdx);
 
                           return (
-                            <div key={actIdx} className={`flex flex-col md:flex-row gap-8 items-start group relative ${isFreeTime ? 'opacity-80 hover:opacity-100 transition-opacity' : ''}`}>
-                              <div className="flex items-center md:flex-col md:w-28 shrink-0 gap-4 pt-2">
-                                <span className="font-black text-slate-800 text-xl tracking-tight drop-shadow-sm">{renderText(act.time)}</span>
-                                <div className={`w-16 h-16 rounded-[1.5rem] flex items-center justify-center shadow-md border-4 ring-4 ring-white/50 ${iconTheme}`}><Icon className="w-7 h-7" /></div>
+                            <div key={actIdx} className={`flex flex-col md:flex-row gap-4 sm:gap-6 md:gap-8 items-start group relative ${isFreeTime ? 'opacity-80 hover:opacity-100 transition-opacity' : ''}`}>
+                              <div className="flex items-center md:flex-col md:w-28 shrink-0 gap-3 md:gap-4 pt-2">
+                                <span className="font-black text-slate-800 text-lg md:text-xl tracking-tight drop-shadow-sm">{renderText(act.time)}</span>
+                                <div className={`w-12 h-12 md:w-16 md:h-16 rounded-xl md:rounded-[1.5rem] flex items-center justify-center shadow-md border-4 ring-4 ring-white/50 ${iconTheme}`}><Icon className="w-5 h-5 md:w-7 md:h-7" /></div>
                               </div>
                               
-                              <div className={`flex-1 bg-white/95 rounded-[2rem] p-8 shadow-xl hover:shadow-2xl transition-all duration-300 print:shadow-none print:border-b-2 print:border-slate-200 print:rounded-none relative overflow-hidden print:p-4 w-full ${isFreeTime ? 'border-2 border-dashed border-teal-200 bg-teal-50/30' : 'border border-white'}`}>
+                              <div className={`flex-1 bg-white/95 rounded-[2rem] shadow-xl hover:shadow-2xl transition-all duration-300 print:shadow-none print:border-b-2 print:border-slate-200 print:rounded-none relative overflow-hidden print:p-4 w-full transform-gpu ${isFreeTime ? 'border-2 border-dashed border-teal-200 bg-teal-50/30' : 'border border-white'}`}>
                                 
                                 {routeUrl && (
-                                  <div className="absolute top-0 left-0 right-0 bg-gradient-to-r from-blue-50/90 to-indigo-50/90 border-b border-indigo-100/50 px-8 py-3 flex items-center justify-between print:hidden backdrop-blur-sm">
-                                    <div className="flex items-center gap-3 text-sm font-bold text-slate-600 truncate">
-                                      <MapPinned className="w-4 h-4 text-indigo-500 shrink-0"/>
+                                  <div className="absolute top-0 left-0 right-0 bg-gradient-to-r from-blue-50/90 to-indigo-50/90 border-b border-indigo-100/50 px-5 sm:px-6 md:px-8 py-3 flex items-center justify-between print:hidden backdrop-blur-sm rounded-t-[2rem]">
+                                    <div className="flex items-center gap-2 md:gap-3 text-xs md:text-sm font-bold text-slate-600 truncate mr-2">
+                                      <MapPinned className="w-3.5 h-3.5 md:w-4 md:h-4 text-indigo-500 shrink-0"/>
                                       <span className="truncate">{renderText(originText)}</span>
-                                      <ArrowRight className="w-4 h-4 text-slate-400 shrink-0"/>
+                                      <ArrowRight className="w-3.5 h-3.5 md:w-4 md:h-4 text-slate-400 shrink-0"/>
                                       <span className="truncate">{renderText(act.location)}</span>
                                     </div>
-                                    <a href={routeUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-xs font-bold bg-indigo-600 text-white px-4 py-2 rounded-xl hover:bg-indigo-700 transition-colors shadow-sm shrink-0">
-                                      <Navigation className="w-3.5 h-3.5"/> {t.routeNav}
+                                    <a href={routeUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 md:gap-2 text-[10px] md:text-xs font-bold bg-indigo-600 text-white px-3 md:px-4 py-1.5 md:py-2 rounded-xl hover:bg-indigo-700 transition-colors shadow-sm shrink-0">
+                                      <Navigation className="w-3.5 h-3.5"/> <span className="hidden sm:inline">{t.routeNav}</span><span className="sm:hidden">導航</span>
                                     </a>
                                   </div>
                                 )}
 
-                                <div className={`${routeUrl ? 'pt-10' : ''}`}>
+                                <div className={`${routeUrl ? 'pt-14 md:pt-12' : 'pt-4 md:pt-5'}`}>
                                   {isThisNodeSwapping && (
                                     <div className="absolute inset-0 bg-white/90 backdrop-blur-sm z-20 flex flex-col items-center justify-center rounded-[2rem]">
                                       <Loader2 className="w-10 h-10 text-indigo-600 animate-spin mb-3" />
@@ -989,63 +1161,144 @@ export default function App() {
                                     </div>
                                   )}
 
-                                  <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4 mb-6">
-                                    <h4 className={`font-black text-3xl leading-tight mt-1 drop-shadow-sm ${isFreeTime ? 'text-teal-800' : 'text-slate-800'}`}>
+                                  {/* 動態時間軸引擎 (Dynamic Timeline Controls) */}
+                                  <div className="mx-5 sm:mx-6 md:mx-8 mb-6 flex flex-wrap items-center gap-3 bg-slate-50/80 p-3.5 md:p-4 rounded-2xl border border-slate-200/60 print:hidden">
+                                    <label className="flex items-center gap-2.5 cursor-pointer shrink-0">
+                                      <input 
+                                        type="checkbox" 
+                                        checked={!!act.isCompleted} 
+                                        onChange={() => handleToggleComplete(idx, actIdx)} 
+                                        className="w-5 h-5 accent-indigo-600 rounded border-slate-300"
+                                      />
+                                      <span className={`text-sm font-black transition-colors ${act.isCompleted ? 'text-slate-400 line-through' : 'text-slate-700'}`}>
+                                        {t.markDone}
+                                      </span>
+                                    </label>
+
+                                    {act.isCompleted && (
+                                      <div className="flex flex-wrap items-center gap-3 flex-1 animate-in fade-in slide-in-from-left-2 border-l border-slate-200 pl-3 ml-1">
+                                        <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-slate-200 shadow-sm shrink-0">
+                                          <span className="text-xs font-bold text-slate-500">{t.actualTime}</span>
+                                          <input 
+                                            type="time" 
+                                            value={act.actualEndTime || ''} 
+                                            onChange={(e) => handleActualTimeChange(idx, actIdx, e.target.value)} 
+                                            className="text-sm font-black text-indigo-700 outline-none bg-transparent cursor-pointer"
+                                          />
+                                        </div>
+                                        
+                                        <div className="flex items-center gap-1.5 ml-auto bg-white p-1.5 rounded-xl border border-slate-200 shadow-sm">
+                                          <span className="text-[10px] md:text-xs font-black text-slate-400 px-2 tracking-widest uppercase hidden sm:block">微調</span>
+                                          <button onClick={() => handleShiftFromNode(idx, actIdx, 15)} className="text-xs bg-indigo-50 text-indigo-700 px-2.5 py-1.5 rounded-lg hover:bg-indigo-100 font-bold transition-colors">+15m</button>
+                                          <button onClick={() => handleShiftFromNode(idx, actIdx, 30)} className="text-xs bg-indigo-50 text-indigo-700 px-2.5 py-1.5 rounded-lg hover:bg-indigo-100 font-bold transition-colors">+30m</button>
+                                          <div className="w-px h-4 bg-slate-200 mx-0.5"></div>
+                                          <button onClick={() => handleShiftFromNode(idx, actIdx, -15)} className="text-xs bg-teal-50 text-teal-700 px-2.5 py-1.5 rounded-lg hover:bg-teal-100 font-bold transition-colors">-15m</button>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  <div className="px-5 sm:px-6 md:px-8 flex flex-col md:flex-row md:justify-between md:items-start gap-4 mb-6">
+                                    <h4 className={`font-black text-2xl md:text-3xl leading-tight mt-1 drop-shadow-sm transition-colors ${isFreeTime ? 'text-teal-800' : (act.isCompleted ? 'text-slate-400' : 'text-slate-800')}`}>
                                       {renderText(act.location)}
                                     </h4>
                                     
-                                    {!isBoundaryNode && (
-                                      <div className="flex items-center gap-3 print:hidden">
-                                        <button onClick={() => handleSwapNode(idx, actIdx)} className="flex items-center gap-1.5 text-sm font-bold text-indigo-700 bg-indigo-100 hover:bg-indigo-200 px-4 py-2 rounded-xl transition-colors shadow-sm">
-                                          <RefreshCw className="w-4 h-4" /> {t.swapNode}
-                                        </button>
-                                        
-                                        {/* 【核心修復】雙擊防護型刪除：避免時空斷層 */}
-                                        {!isFreeTime && (
-                                          <button 
-                                            onClick={() => handleDeleteNode(idx, actIdx)} 
-                                            className={`flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-xl transition-all shadow-sm ${deletingNode === `${idx}-${actIdx}` ? 'bg-red-600 text-white animate-pulse' : 'text-red-700 bg-red-100 hover:bg-red-200'}`}
-                                          >
-                                            <Trash2 className="w-4 h-4" /> 
-                                            {deletingNode === `${idx}-${actIdx}` ? t.confirmDelete : t.deleteNode}
-                                          </button>
+                                    {!isBoundaryNode && !act.isCompleted && (
+                                      <div className="w-full md:w-auto print:hidden transition-all duration-300">
+                                        {isCustomInputOpen ? (
+                                          <div className="flex flex-col sm:flex-row w-full gap-2 animate-in fade-in slide-in-from-right-2 pt-1">
+                                            <input 
+                                              type="text" 
+                                              autoFocus
+                                              value={customSwapText} 
+                                              onChange={(e) => setCustomSwapText(e.target.value)} 
+                                              placeholder={t.customPlh} 
+                                              className="flex-1 min-w-[200px] p-2.5 text-sm font-medium text-slate-800 rounded-xl border-2 border-indigo-200 focus:border-indigo-500 focus:ring-0 outline-none shadow-sm transition-colors"
+                                              onKeyDown={(e) => { if(e.key === 'Enter' && customSwapText.trim()) handleSwapNode(idx, actIdx, 'custom', customSwapText) }}
+                                            />
+                                            <div className="flex gap-2">
+                                              <button 
+                                                disabled={!customSwapText.trim()}
+                                                onClick={() => handleSwapNode(idx, actIdx, 'custom', customSwapText)} 
+                                                className="flex-1 sm:flex-none bg-indigo-600 text-white font-bold text-xs px-4 py-2.5 rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-colors shadow-sm"
+                                              >
+                                                {t.btnConfirm}
+                                              </button>
+                                              <button 
+                                                onClick={() => { setShowCustomInputFor(null); setCustomSwapText(''); }} 
+                                                className="flex-1 sm:flex-none bg-white text-slate-500 border-2 border-slate-200 font-bold text-xs px-4 py-2.5 rounded-xl hover:bg-slate-50 transition-colors"
+                                              >
+                                                {t.btnCancel}
+                                              </button>
+                                            </div>
+                                          </div>
+                                        ) : isMenuOpen ? (
+                                          <div className="flex flex-wrap items-center gap-2 bg-indigo-50/80 p-3 rounded-2xl border border-indigo-100 shadow-inner w-full md:w-[380px] animate-in fade-in slide-in-from-top-2">
+                                            <div className="w-full flex justify-between items-center mb-1">
+                                              <span className="text-xs font-black text-indigo-800 uppercase tracking-wider">{t.swapPrompt}</span>
+                                              <button onClick={() => setSwapMenuOpenFor(null)} className="text-indigo-300 hover:text-indigo-600 bg-white rounded-full p-1 shadow-sm"><X className="w-3 h-3"/></button>
+                                            </div>
+                                            <button onClick={() => handleSwapNode(idx, actIdx, 'indoor')} className="flex-1 min-w-[110px] text-xs font-bold text-indigo-700 bg-white hover:bg-indigo-600 hover:text-white border border-indigo-200 px-3 py-2 rounded-xl transition-colors shadow-sm">☂️ {t.swapOpts.indoor}</button>
+                                            <button onClick={() => handleSwapNode(idx, actIdx, 'relax')} className="flex-1 min-w-[110px] text-xs font-bold text-teal-700 bg-white hover:bg-teal-600 hover:text-white border border-teal-200 px-3 py-2 rounded-xl transition-colors shadow-sm">☕ {t.swapOpts.relax}</button>
+                                            <button onClick={() => handleSwapNode(idx, actIdx, 'food')} className="flex-1 min-w-[110px] text-xs font-bold text-orange-700 bg-white hover:bg-orange-500 hover:text-white border border-orange-200 px-3 py-2 rounded-xl transition-colors shadow-sm">🍔 {t.swapOpts.food}</button>
+                                            <button onClick={() => handleSwapNode(idx, actIdx, 'any')} className="flex-1 min-w-[110px] text-xs font-bold text-purple-700 bg-white hover:bg-purple-600 hover:text-white border border-purple-200 px-3 py-2 rounded-xl transition-colors shadow-sm">✨ {t.swapOpts.any}</button>
+                                            <button onClick={() => setShowCustomInputFor(`${idx}-${actIdx}`)} className="flex-1 min-w-[110px] text-xs font-bold text-blue-700 bg-white hover:bg-blue-600 hover:text-white border border-blue-200 px-3 py-2 rounded-xl transition-colors shadow-sm">{t.swapOpts.custom}</button>
+                                          </div>
+                                        ) : (
+                                          <div className="flex flex-wrap items-center gap-2 md:gap-3 justify-end">
+                                            <button onClick={() => setSwapMenuOpenFor(`${idx}-${actIdx}`)} className="flex items-center gap-1.5 text-xs md:text-sm font-bold text-indigo-700 bg-indigo-100 hover:bg-indigo-200 px-3 md:px-4 py-2 rounded-xl transition-colors shadow-sm">
+                                              <RefreshCw className="w-3.5 h-3.5 md:w-4 md:h-4" /> {t.swapNode}
+                                            </button>
+                                            
+                                            {!isFreeTime && (
+                                              <button 
+                                                onClick={() => handleDeleteNode(idx, actIdx)} 
+                                                className={`flex items-center gap-1.5 text-xs md:text-sm font-bold px-3 md:px-4 py-2 rounded-xl transition-all shadow-sm ${deletingNode === `${idx}-${actIdx}` ? 'bg-red-600 text-white animate-pulse' : 'text-red-700 bg-red-100 hover:bg-red-200'}`}
+                                              >
+                                                <Trash2 className="w-3.5 h-3.5 md:w-4 md:h-4" /> 
+                                                {deletingNode === `${idx}-${actIdx}` ? t.confirmDelete : t.deleteNode}
+                                              </button>
+                                            )}
+                                          </div>
                                         )}
                                       </div>
                                     )}
                                   </div>
 
                                   {act.costEstimate && !isFreeTime && (
-                                    <span className="inline-flex items-center gap-2 bg-slate-100 text-slate-800 font-bold px-4 py-2 rounded-xl text-sm whitespace-nowrap mb-5 print:bg-transparent print:border print:border-slate-200 shadow-sm border border-slate-200/50">
-                                      <Wallet className="w-4 h-4 text-slate-500"/> 
+                                    <span className={`inline-flex items-center gap-1.5 md:gap-2 text-slate-800 font-bold px-3 md:px-4 py-1.5 md:py-2 rounded-xl text-xs md:text-sm whitespace-nowrap mb-4 md:mb-5 print:bg-transparent print:border print:border-slate-200 shadow-sm border border-slate-200/50 mx-5 sm:mx-6 md:mx-8 ${act.isCompleted ? 'bg-slate-50 opacity-50' : 'bg-slate-100'}`}>
+                                      <Wallet className="w-3.5 h-3.5 md:w-4 md:h-4 text-slate-500"/> 
                                       {renderText(act.costEstimate)}
                                     </span>
                                   )}
 
+                                  {/* 🚀 手術部位：營業時間防呆與免責標籤 */}
                                   {act.operatingHours && !isFreeTime && (
-                                    <div className="flex items-center gap-2 text-sm font-bold text-slate-600 mb-5 bg-white inline-flex px-4 py-2 rounded-xl border border-slate-200 ml-3 print:bg-transparent print:border print:border-slate-200 shadow-sm">
-                                      <Clock className="w-4 h-4 text-slate-400" /> {renderText(act.operatingHours)}
+                                    <div className={`flex items-center gap-1.5 md:gap-2 text-xs md:text-sm font-bold text-slate-600 mb-4 md:mb-5 bg-white inline-flex px-3 md:px-4 py-1.5 md:py-2 rounded-xl border border-slate-200 print:bg-transparent print:border print:border-slate-200 shadow-sm ${act.isCompleted ? 'opacity-50' : ''} ml-5 sm:ml-9 md:ml-11`}>
+                                      <Clock className="w-3.5 h-3.5 md:w-4 md:h-4 text-slate-400" /> 
+                                      <span>{renderText(act.operatingHours)} <span className="text-[10px] md:text-xs text-slate-400 font-medium ml-1 tracking-wide">{t.estTime}</span></span>
                                     </div>
                                   )}
 
-                                  <div className={`${isFreeTime ? 'bg-teal-50 border-teal-100' : 'bg-slate-50 border-slate-200/60'} p-6 md:p-8 rounded-3xl border mb-6 print:bg-transparent print:border-none print:p-0 print:mb-4 shadow-sm`}>
+                                  <div className={`${isFreeTime ? 'bg-teal-50 border-teal-100' : 'bg-slate-50 border-slate-200/60'} p-5 sm:p-6 md:p-8 rounded-3xl border mb-6 print:bg-transparent print:border-none print:p-0 print:mb-4 shadow-sm mx-5 sm:mx-6 md:mx-8 ${act.isCompleted ? 'opacity-60' : ''}`}>
                                     {!isFreeTime && (
-                                      <div className="flex items-center gap-2.5 mb-3">
-                                        {act.type === 'transit' ? <Car className="w-5 h-5 text-slate-500"/> : <CheckCircle2 className="w-5 h-5 text-orange-500"/>}
-                                        <strong className="text-slate-800 text-lg">{t.actionGuide}</strong>
+                                      <div className="flex items-center gap-2 mb-2 md:mb-3">
+                                        {act.type === 'transit' ? <Car className="w-4 h-4 md:w-5 md:h-5 text-slate-500"/> : <CheckCircle2 className="w-4 h-4 md:w-5 md:h-5 text-orange-500"/>}
+                                        <strong className="text-slate-800 text-base md:text-lg">{t.actionGuide}</strong>
                                       </div>
                                     )}
-                                    <p className={`${isFreeTime ? 'text-teal-700' : 'text-slate-700'} leading-relaxed text-base md:text-lg font-medium whitespace-pre-wrap`}>
+                                    <p className={`${isFreeTime ? 'text-teal-700' : 'text-slate-700'} leading-relaxed text-sm md:text-lg font-medium whitespace-pre-wrap`}>
                                       {renderText(act.detailedInstruction)}
                                     </p>
                                   </div>
 
                                   {act.expertReason && !isFreeTime && (
-                                    <div className="bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-100 p-6 md:p-8 rounded-3xl mb-6 print:bg-indigo-50/30 print:border-none print:p-4 shadow-sm">
-                                      <div className="flex gap-4 text-indigo-900">
-                                        <Sparkles className="w-6 h-6 shrink-0 text-indigo-600 mt-1" />
+                                    <div className={`bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-100 p-5 sm:p-6 md:p-8 rounded-3xl mb-6 print:bg-indigo-50/30 print:border-none print:p-4 shadow-sm mx-5 sm:mx-6 md:mx-8 ${act.isCompleted ? 'opacity-60 grayscale-[50%]' : ''}`}>
+                                      <div className="flex gap-3 md:gap-4 text-indigo-900">
+                                        <Sparkles className="w-5 h-5 md:w-6 md:h-6 shrink-0 text-indigo-600 mt-1" />
                                         <div>
-                                          <strong className="block text-lg font-black text-indigo-900 mb-2 tracking-wide">{t.expertReason}</strong>
-                                          <p className="text-base md:text-lg font-medium leading-relaxed text-indigo-800/90 whitespace-pre-wrap">
+                                          <strong className="block text-base md:text-lg font-black text-indigo-900 mb-2 tracking-wide">{t.expertReason}</strong>
+                                          <p className="text-sm md:text-lg font-medium leading-relaxed text-indigo-800/90 whitespace-pre-wrap">
                                             {renderText(act.expertReason)}
                                           </p>
                                         </div>
@@ -1053,22 +1306,21 @@ export default function App() {
                                     </div>
                                   )}
                                   
-                                  {/* 自由時間不顯示外部連結按鈕 */}
                                   {!isFreeTime && (
-                                    <div className="flex flex-wrap gap-4 print:hidden pt-2">
+                                    <div className={`flex flex-wrap gap-3 md:gap-4 print:hidden pt-2 mx-5 sm:mx-6 md:mx-8 pb-4 sm:pb-5 md:pb-6 ${act.isCompleted ? 'opacity-50 pointer-events-none' : ''}`}>
                                       {act.officialLink && (
-                                        <a href={act.officialLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 bg-slate-900 hover:bg-black text-white text-sm font-bold px-6 py-3 rounded-xl shadow-md transition-colors border border-slate-700">
-                                          <ExternalLink className="w-4 h-4"/> {t.officialLink}
+                                        <a href={act.officialLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 md:gap-2 bg-slate-900 hover:bg-black text-white text-xs md:text-sm font-bold px-4 md:px-6 py-2.5 md:py-3 rounded-xl shadow-md transition-colors border border-slate-700">
+                                          <ExternalLink className="w-3.5 h-3.5 md:w-4 md:h-4"/> {t.officialLink}
                                         </a>
                                       )}
                                       
                                       {act.type !== 'transit' && (
                                         <>
-                                          <a href={getGoogleMapsUrl(renderText(act.location), formData.destCity)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-700 border-2 border-slate-200 text-sm font-bold px-6 py-3 rounded-xl transition-colors shadow-sm">
-                                            <Map className="w-4 h-4 text-blue-600"/> {t.mapNav}
+                                          <a href={getGoogleMapsUrl(renderText(act.location), formData.destCity)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 md:gap-2 bg-white hover:bg-slate-50 text-slate-700 border-2 border-slate-200 text-xs md:text-sm font-bold px-4 md:px-6 py-2.5 md:py-3 rounded-xl transition-colors shadow-sm">
+                                            <Map className="w-3.5 h-3.5 md:w-4 md:h-4 text-blue-600"/> {t.mapNav}
                                           </a>
-                                          <a href={getGoogleImagesUrl(renderText(act.location), formData.destCity)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-700 border-2 border-slate-200 text-sm font-bold px-6 py-3 rounded-xl transition-colors shadow-sm">
-                                            <ImageIcon className="w-4 h-4 text-purple-600"/> {t.photo}
+                                          <a href={getGoogleImagesUrl(renderText(act.location), formData.destCity)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 md:gap-2 bg-white hover:bg-slate-50 text-slate-700 border-2 border-slate-200 text-xs md:text-sm font-bold px-4 md:px-6 py-2.5 md:py-3 rounded-xl transition-colors shadow-sm">
+                                            <ImageIcon className="w-3.5 h-3.5 md:w-4 md:h-4 text-purple-600"/> {t.photo}
                                           </a>
                                         </>
                                       )}
@@ -1089,7 +1341,6 @@ export default function App() {
         )}
       </main>
 
-      {/* --- 頁尾版號宣告 --- */}
       <footer className="relative z-10 py-8 text-center text-white/70 text-xs font-bold tracking-widest print:hidden">
         © 2026 | ITINERARY MASTER | VERSION {APP_VERSION.split(' - ')[0]}
       </footer>
