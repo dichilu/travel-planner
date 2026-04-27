@@ -1,8 +1,4 @@
-// --- 自訂 YouTube 字幕擷取 API (Edge Function 版本) ---
-// 使用 Vercel Edge Runtime，IP 範圍與一般 Serverless Function 不同，
-// 可降低被 YouTube 反爬蟲機制封鎖的機率。
-
-export const config = { runtime: 'edge' };
+// --- YouTube 字幕擷取 API (使用 RapidAPI 專業服務) ---
 
 const VIDEO_ID_REGEX = /(?:youtube\.com\/(?:[^/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?/\s]{11})/i;
 
@@ -13,190 +9,78 @@ function extractVideoId(url) {
   return match ? match[1] : null;
 }
 
-function decodeEntities(text) {
-  return text
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&apos;/g, "'")
-    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
-    .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(parseInt(dec, 10)));
-}
+export default async function handler(req, res) {
+  // 設定 CORS Headers
+  res.setHeader('Access-Control-Allow-Credentials', true);
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
 
-function parseTranscriptXml(xml) {
-  const pRegex = /<p\s+t="(\d+)"\s+d="(\d+)"[^>]*>([\s\S]*?)<\/p>/g;
-  let results = [];
-  let m;
-  while ((m = pRegex.exec(xml)) !== null) {
-    let text = m[3];
-    const sRegex = /<s[^>]*>([^<]*)<\/s>/g;
-    let sText = '';
-    let sMatch;
-    while ((sMatch = sRegex.exec(text)) !== null) sText += sMatch[1];
-    if (!sText) sText = text.replace(/<[^>]+>/g, '');
-    sText = decodeEntities(sText).trim();
-    if (sText) results.push(sText);
-  }
-  if (results.length > 0) return results.join(' ');
-
-  const textRegex = /<text[^>]*>([\s\S]*?)<\/text>/g;
-  while ((m = textRegex.exec(xml)) !== null) {
-    const text = decodeEntities(m[1].replace(/<[^>]+>/g, '')).trim();
-    if (text) results.push(text);
-  }
-  return results.join(' ');
-}
-
-async function fetchCaptionTrack(tracks) {
-  const track =
-    tracks.find(t => t.languageCode === 'zh-Hant') ||
-    tracks.find(t => t.languageCode === 'zh-TW') ||
-    tracks.find(t => t.languageCode?.startsWith('zh')) ||
-    tracks.find(t => t.vssId?.includes('.zh')) ||
-    tracks[0];
-
-  if (!track?.baseUrl) return null;
-
-  const res = await fetch(track.baseUrl, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      'Referer': 'https://www.youtube.com/',
-    },
-  });
-  if (!res.ok) return null;
-  const xml = await res.text();
-  const text = parseTranscriptXml(xml);
-  return text || null;
-}
-
-// 策略一：ANDROID InnerTube API
-async function fetchViaAndroid(videoId) {
-  const res = await fetch('https://www.youtube.com/youtubei/v1/player?prettyPrint=false', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'User-Agent': 'com.google.android.youtube/20.10.38 (Linux; U; Android 14)',
-    },
-    body: JSON.stringify({
-      context: { client: { clientName: 'ANDROID', clientVersion: '20.10.38' } },
-      videoId,
-    }),
-  });
-  if (!res.ok) return null;
-  const data = await res.json();
-  const tracks = data?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
-  if (!Array.isArray(tracks) || tracks.length === 0) return null;
-  return await fetchCaptionTrack(tracks);
-}
-
-// 策略二：IOS InnerTube API（Vercel Edge 上成功率較高）
-async function fetchViaIOS(videoId) {
-  const res = await fetch('https://www.youtube.com/youtubei/v1/player?prettyPrint=false', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'User-Agent': 'com.google.ios.youtube/20.10.38 (iPhone16,2; U; CPU iPhone OS 17_7_2 like Mac OS X)',
-    },
-    body: JSON.stringify({
-      context: { client: { clientName: 'IOS', clientVersion: '20.10.38' } },
-      videoId,
-    }),
-  });
-  if (!res.ok) return null;
-  const data = await res.json();
-  const tracks = data?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
-  if (!Array.isArray(tracks) || tracks.length === 0) return null;
-  return await fetchCaptionTrack(tracks);
-}
-
-// 策略三：WEB InnerTube API（加入 consent cookie 繞過 GDPR）
-async function fetchViaWeb(videoId) {
-  const res = await fetch('https://www.youtube.com/youtubei/v1/player?prettyPrint=false', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-      'Cookie': 'CONSENT=PENDING+987; SOCS=CAESEwgDEgk2MjQyMjkzMTQaAmVuIAEaBgiA_LUGAQ',
-      'Origin': 'https://www.youtube.com',
-      'Referer': 'https://www.youtube.com/',
-    },
-    body: JSON.stringify({
-      context: {
-        client: {
-          clientName: 'WEB',
-          clientVersion: '2.20250222.10.00',
-          hl: 'en',
-          gl: 'US',
-        },
-      },
-      videoId,
-    }),
-  });
-  if (!res.ok) return null;
-  const data = await res.json();
-  const tracks = data?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
-  if (!Array.isArray(tracks) || tracks.length === 0) return null;
-  return await fetchCaptionTrack(tracks);
-}
-
-// ====== Edge Function Handler (使用 Web API Request/Response) ======
-export default async function handler(request) {
-  // Handle CORS preflight
-  if (request.method === 'OPTIONS') {
-    return new Response(null, {
-      status: 200,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET,OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
-      },
-    });
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
   }
 
-  const { searchParams } = new URL(request.url);
-  const url = searchParams.get('url');
-
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Content-Type': 'application/json',
-  };
-
+  const { url } = req.query;
   if (!url) {
-    return new Response(JSON.stringify({ error: 'Missing YouTube URL' }), { status: 400, headers: corsHeaders });
+    return res.status(400).json({ error: 'Missing YouTube URL' });
   }
 
   const videoId = extractVideoId(url);
   if (!videoId) {
-    return new Response(JSON.stringify({ error: 'Invalid YouTube URL' }), { status: 400, headers: corsHeaders });
+    return res.status(400).json({ error: 'Invalid YouTube URL' });
   }
 
-  const strategies = [
-    { name: 'Android InnerTube', fn: () => fetchViaAndroid(videoId) },
-    { name: 'IOS InnerTube', fn: () => fetchViaIOS(videoId) },
-    { name: 'Web InnerTube', fn: () => fetchViaWeb(videoId) },
-  ];
+  const apiKey = '0aa24c7342mshab6d9fc681d7d2fp10a9c7jsnd19a03607252';
+  const apiHost = 'youtube-transcript3.p.rapidapi.com';
 
-  for (const strategy of strategies) {
-    try {
-      const transcript = await strategy.fn();
-      if (transcript && transcript.trim().length > 0) {
-        console.log(`[getTranscript] ✅ Success via ${strategy.name} for ${videoId}`);
-        return new Response(JSON.stringify({ transcript }), { status: 200, headers: corsHeaders });
+  try {
+    console.log(`[getTranscript] Fetching transcript from RapidAPI for ${videoId}...`);
+    
+    const response = await fetch(`https://${apiHost}/api/transcript?videoId=${videoId}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-rapidapi-host': apiHost,
+        'x-rapidapi-key': apiKey
       }
-      console.log(`[getTranscript] ⏭️ ${strategy.name} returned empty for ${videoId}`);
-    } catch (err) {
-      console.log(`[getTranscript] ⚠️ ${strategy.name} failed for ${videoId}: ${err.message}`);
-    }
-  }
+    });
 
-  console.log(`[getTranscript] ❌ All strategies failed for ${videoId}`);
-  return new Response(
-    JSON.stringify({
-      error: 'Failed to fetch transcript. All strategies exhausted.',
-      details: `Video ID: ${videoId}. The video may not have captions, or YouTube is blocking this server.`,
-    }),
-    { status: 500, headers: corsHeaders }
-  );
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`RapidAPI responded with status ${response.status}: ${errText}`);
+    }
+
+    const data = await response.json();
+    
+    // 根據 youtube-transcript3 的常見回傳格式：
+    // 可能是一個物件 { transcript: [...] } 或是陣列 [...]，內部包含 { text, start, duration }
+    let transcriptText = '';
+    
+    const lines = data.transcript || (Array.isArray(data) ? data : null);
+    
+    if (Array.isArray(lines)) {
+      transcriptText = lines.map(line => line.text).join(' ');
+    } else if (typeof data === 'string') {
+      transcriptText = data;
+    }
+
+    if (!transcriptText || transcriptText.trim().length === 0) {
+      console.log(`[getTranscript] ❌ RapidAPI returned empty transcript for ${videoId}`);
+      return res.status(404).json({ 
+        error: 'Transcript is empty', 
+        details: 'Could not extract text lines from API response.' 
+      });
+    }
+
+    console.log(`[getTranscript] ✅ Success! Fetched ${transcriptText.length} chars.`);
+    return res.status(200).json({ transcript: transcriptText });
+
+  } catch (err) {
+    console.error(`[getTranscript] 💥 Error:`, err.message);
+    return res.status(500).json({
+      error: 'Failed to fetch transcript via RapidAPI.',
+      details: err.message
+    });
+  }
 }
