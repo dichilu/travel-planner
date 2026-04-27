@@ -2,7 +2,21 @@
 
 所有關於「行程規劃大師」的版本更新、功能新增與 Bug 修復紀錄將統一維護於此。
 
-## [v1.2.0] - 最新更新 (Current)
+## [v1.3.0] - 最新更新 (Current)
+
+### 🐛 修正 (Fixed)
+- **YouTube 字幕擷取全面失效修復 (Transcript Fetch Rewrite)**：
+  - **根本原因**：原先使用的 `youtube-transcript` 第三方套件在 Vercel 的雲端伺服器 IP 上被 YouTube 反爬蟲機制全面封鎖，導致所有影片的字幕擷取均回報「無 CC 字幕」而靜默失敗。
+  - **解決方案**：完全移除 `youtube-transcript` 套件依賴，改為自訂的零依賴字幕擷取引擎 (`api/getTranscript.js`)，使用原生 `fetch` 搭配三重 fallback 策略：
+    1. **Android InnerTube API**（v20.10.38 用戶端偽裝，成功率最高）
+    2. **Web InnerTube API**（加入 GDPR consent cookie 繞過歐洲同意頁面）
+    3. **YouTube 網頁爬取**（加入 consent cookie 的 HTML 解析 fallback）
+  - **中文字幕優先選取**：新增自動偵測邏輯，優先選取 `zh-Hant` → `zh-TW` → `zh` → 任意語言的字幕軌道，確保中文影片的字幕能正確被擷取。
+  - **前端零改動**：API 的輸入輸出格式維持不變，前端 `App.jsx` 無需任何修改。
+
+---
+
+## [v1.2.0]
 
 ### ✨ 新增 (Added)
 - **YouTube 網紅行程自動萃取與整合**：新增 Vercel Serverless Function 支援。使用者只需貼上 YouTube Vlog 網址，系統會自動抓取影片逐字稿，並啟動「三角過濾器 (Veto Protocol)」，將影片精華去蕪存菁地完美融入使用者的客製化行程中。

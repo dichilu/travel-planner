@@ -1,194 +1,209 @@
-/**
- * Vercel Serverless Function: YouTube Transcript Fetcher (Custom)
- *
- * Replaces the `youtube-transcript` npm package which fails on Vercel
- * because YouTube blocks cloud provider (AWS/Vercel) IP ranges.
- *
- * Primary strategy: ANDROID InnerTube client (v20.10.38) — proven to
- * bypass datacenter IP restrictions.
- * Fallback: Web page scraping with consent cookies.
- */
+// --- 自訂 YouTube 字幕擷取 API (Custom YouTube Transcript Fetcher) ---
+// 不依賴第三方套件，使用多重策略繞過雲端 IP 封鎖。
 
-const RE_VIDEO_ID = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i;
+const VIDEO_ID_REGEX = /(?:youtube\.com\/(?:[^/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?/\s]{11})/i;
 
 function extractVideoId(url) {
-  if (/^[a-zA-Z0-9_-]{11}$/.test(url)) return url;
-  const match = url.match(RE_VIDEO_ID);
+  if (!url) return null;
+  if (url.length === 11 && /^[a-zA-Z0-9_-]+$/.test(url)) return url;
+  const match = url.match(VIDEO_ID_REGEX);
   return match ? match[1] : null;
 }
 
-// --- Constants ---
-const ANDROID_VERSION = '20.10.38';
-const ANDROID_UA = `com.google.android.youtube/${ANDROID_VERSION} (Linux; U; Android 14)`;
-const ANDROID_CONTEXT = { client: { clientName: 'ANDROID', clientVersion: ANDROID_VERSION } };
+function decodeEntities(text) {
+  return text
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(parseInt(dec, 10)));
+}
 
-const WEB_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/85.0.4183.83 Safari/537.36,gzip(gfe)';
-const CONSENT_COOKIES = 'CONSENT=PENDING+999';
+function parseTranscriptXml(xml) {
+  // 嘗試新版 <p> 格式
+  const pRegex = /<p\s+t="(\d+)"\s+d="(\d+)"[^>]*>([\s\S]*?)<\/p>/g;
+  let results = [];
+  let m;
+  while ((m = pRegex.exec(xml)) !== null) {
+    let text = m[3];
+    // 處理 <s> 子元素
+    const sRegex = /<s[^>]*>([^<]*)<\/s>/g;
+    let sText = '';
+    let sMatch;
+    while ((sMatch = sRegex.exec(text)) !== null) sText += sMatch[1];
+    if (!sText) sText = text.replace(/<[^>]+>/g, '');
+    sText = decodeEntities(sText).trim();
+    if (sText) results.push(sText);
+  }
+  if (results.length > 0) return results.join(' ');
 
-const INNERTUBE_URL = 'https://www.youtube.com/youtubei/v1/player?prettyPrint=false';
+  // 嘗試舊版 <text> 格式
+  const textRegex = /<text[^>]*>([\s\S]*?)<\/text>/g;
+  while ((m = textRegex.exec(xml)) !== null) {
+    const text = decodeEntities(m[1].replace(/<[^>]+>/g, '')).trim();
+    if (text) results.push(text);
+  }
+  return results.join(' ');
+}
 
-// --- Strategy 1: ANDROID InnerTube (most reliable from datacenter IPs) ---
+// ====== 策略一：ANDROID InnerTube API（原版套件的方法，成功率最高）======
 async function fetchViaAndroid(videoId) {
-  const resp = await fetch(INNERTUBE_URL, {
+  const res = await fetch('https://www.youtube.com/youtubei/v1/player?prettyPrint=false', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'User-Agent': ANDROID_UA,
+      'User-Agent': 'com.google.android.youtube/20.10.38 (Linux; U; Android 14)',
     },
-    body: JSON.stringify({ context: ANDROID_CONTEXT, videoId }),
+    body: JSON.stringify({
+      context: { client: { clientName: 'ANDROID', clientVersion: '20.10.38' } },
+      videoId,
+    }),
   });
-
-  if (!resp.ok) throw new Error(`InnerTube HTTP ${resp.status}`);
-
-  const data = await resp.json();
+  if (!res.ok) return null;
+  const data = await res.json();
   const tracks = data?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
-
   if (!Array.isArray(tracks) || tracks.length === 0) return null;
-  return await downloadTranscript(tracks);
+  return await fetchCaptionTrack(tracks);
 }
 
-// --- Strategy 2: Web page scraping with consent cookies ---
-async function fetchViaWebPage(videoId) {
-  const resp = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+// ====== 策略二：WEB InnerTube API（加入 consent cookie 繞過 GDPR）======
+async function fetchViaWeb(videoId) {
+  const res = await fetch('https://www.youtube.com/youtubei/v1/player?prettyPrint=false', {
+    method: 'POST',
     headers: {
-      'User-Agent': WEB_UA,
-      'Cookie': CONSENT_COOKIES,
+      'Content-Type': 'application/json',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+      'Cookie': 'CONSENT=PENDING+987; SOCS=CAESEwgDEgk2MjQyMjkzMTQaAmVuIAEaBgiA_LUGAQ',
+      'Origin': 'https://www.youtube.com',
+      'Referer': 'https://www.youtube.com/',
+    },
+    body: JSON.stringify({
+      context: {
+        client: {
+          clientName: 'WEB',
+          clientVersion: '2.20250222.10.00',
+          hl: 'en',
+          gl: 'US',
+        },
+      },
+      videoId,
+    }),
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  const tracks = data?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
+  if (!Array.isArray(tracks) || tracks.length === 0) return null;
+  return await fetchCaptionTrack(tracks);
+}
+
+// ====== 策略三：直接爬 YouTube 網頁取得字幕軌道（加 consent cookie）======
+async function fetchViaWebPage(videoId) {
+  const res = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Cookie': 'CONSENT=PENDING+987; SOCS=CAESEwgDEgk2MjQyMjkzMTQaAmVuIAEaBgiA_LUGAQ',
     },
   });
+  if (!res.ok) return null;
+  const html = await res.text();
+  if (html.includes('class="g-recaptcha"')) return null;
 
-  if (!resp.ok) throw new Error(`WebPage HTTP ${resp.status}`);
-
-  const html = await resp.text();
-  if (html.includes('class="g-recaptcha"')) {
-    throw new Error('YouTube requires CAPTCHA — IP may be rate-limited');
-  }
-
-  // Parse ytInitialPlayerResponse JSON from the page
+  // 從頁面中解析 ytInitialPlayerResponse
   const marker = 'var ytInitialPlayerResponse = ';
   const startIdx = html.indexOf(marker);
   if (startIdx === -1) return null;
 
+  let depth = 0;
   const jsonStart = startIdx + marker.length;
-  let depth = 0, endIdx = jsonStart;
   for (let i = jsonStart; i < html.length; i++) {
     if (html[i] === '{') depth++;
     else if (html[i] === '}') {
       depth--;
-      if (depth === 0) { endIdx = i + 1; break; }
+      if (depth === 0) {
+        try {
+          const playerResponse = JSON.parse(html.slice(jsonStart, i + 1));
+          const tracks = playerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
+          if (!Array.isArray(tracks) || tracks.length === 0) return null;
+          return await fetchCaptionTrack(tracks);
+        } catch { return null; }
+      }
     }
   }
-
-  try {
-    const playerResp = JSON.parse(html.slice(jsonStart, endIdx));
-    const tracks = playerResp?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
-    if (!Array.isArray(tracks) || tracks.length === 0) return null;
-    return await downloadTranscript(tracks);
-  } catch {
-    return null;
-  }
+  return null;
 }
 
-// --- Download and parse transcript XML from the best caption track ---
-async function downloadTranscript(tracks) {
-  // Prefer: zh-Hant > zh > ja > first available
+// ====== 共用：從字幕軌道取得 XML 並解析為文字 ======
+async function fetchCaptionTrack(tracks) {
+  // 優先選中文，沒有就選第一個
   const track =
     tracks.find(t => t.languageCode === 'zh-Hant') ||
+    tracks.find(t => t.languageCode === 'zh-TW') ||
     tracks.find(t => t.languageCode?.startsWith('zh')) ||
-    tracks.find(t => t.languageCode === 'ja') ||
+    tracks.find(t => t.vssId?.includes('.zh')) ||
     tracks[0];
 
   if (!track?.baseUrl) return null;
 
-  const resp = await fetch(track.baseUrl, {
-    headers: { 'User-Agent': ANDROID_UA },
+  const res = await fetch(track.baseUrl, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      'Referer': 'https://www.youtube.com/',
+    },
   });
-
-  if (!resp.ok) return null;
-
-  const xml = await resp.text();
-  if (!xml || xml.length === 0) return null;
-
-  return parseTranscriptXml(xml);
+  if (!res.ok) return null;
+  const xml = await res.text();
+  const text = parseTranscriptXml(xml);
+  return text || null;
 }
 
-// --- Parse caption XML into plain text ---
-function parseTranscriptXml(xml) {
-  const segments = [];
-  let match;
-
-  // Format 1 (modern): <p t="offset" d="duration">text or <s>text</s></p>
-  const pRegex = /<p\s+t="\d+"\s+d="\d+"[^>]*>([\s\S]*?)<\/p>/g;
-  while ((match = pRegex.exec(xml)) !== null) {
-    let content = match[1];
-    // Try extracting from <s> tags first
-    const sRegex = /<s[^>]*>([^<]*)<\/s>/g;
-    let sMatch, combined = '';
-    while ((sMatch = sRegex.exec(content)) !== null) combined += sMatch[1];
-    if (!combined) combined = content.replace(/<[^>]+>/g, '');
-    combined = decodeEntities(combined).trim();
-    if (combined) segments.push(combined);
-  }
-
-  // Format 2 (legacy): <text start="..." dur="...">text</text>
-  if (segments.length === 0) {
-    const textRegex = /<text start="[^"]*" dur="[^"]*"[^>]*>([^<]*)<\/text>/g;
-    while ((match = textRegex.exec(xml)) !== null) {
-      const text = decodeEntities(match[1]).trim();
-      if (text) segments.push(text);
-    }
-  }
-
-  return segments.length > 0 ? segments.join(' ') : null;
-}
-
-function decodeEntities(str) {
-  return str
-    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&apos;/g, "'")
-    .replace(/&#x([0-9a-fA-F]+);/g, (_, h) => String.fromCodePoint(parseInt(h, 16)))
-    .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(parseInt(d, 10)));
-}
-
-// --- Main Handler ---
+// ====== Vercel Serverless Function Handler ======
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
-  res.setHeader(
-    'Access-Control-Allow-Headers',
-    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
-  );
+  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
 
-  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
 
   const { url } = req.query;
-  if (!url) return res.status(400).json({ error: 'Missing YouTube URL' });
+  if (!url) {
+    return res.status(400).json({ error: 'Missing YouTube URL' });
+  }
 
   const videoId = extractVideoId(url);
-  if (!videoId) return res.status(400).json({ error: 'Invalid YouTube URL', input: url });
-
-  const errors = [];
-
-  // Strategy 1: ANDROID InnerTube (works best from cloud IPs)
-  try {
-    const transcript = await fetchViaAndroid(videoId);
-    if (transcript) return res.status(200).json({ transcript });
-    errors.push('Android InnerTube: No caption tracks found');
-  } catch (e) {
-    errors.push(`Android InnerTube: ${e.message}`);
+  if (!videoId) {
+    return res.status(400).json({ error: 'Invalid YouTube URL' });
   }
 
-  // Strategy 2: Web page scraping (fallback)
-  try {
-    const transcript = await fetchViaWebPage(videoId);
-    if (transcript) return res.status(200).json({ transcript });
-    errors.push('WebPage: No caption tracks found');
-  } catch (e) {
-    errors.push(`WebPage: ${e.message}`);
+  const strategies = [
+    { name: 'Android InnerTube', fn: () => fetchViaAndroid(videoId) },
+    { name: 'Web InnerTube', fn: () => fetchViaWeb(videoId) },
+    { name: 'Web Page Scrape', fn: () => fetchViaWebPage(videoId) },
+  ];
+
+  for (const strategy of strategies) {
+    try {
+      const transcript = await strategy.fn();
+      if (transcript && transcript.trim().length > 0) {
+        console.log(`[getTranscript] ✅ Success via ${strategy.name} for ${videoId}`);
+        return res.status(200).json({ transcript });
+      }
+      console.log(`[getTranscript] ⏭️ ${strategy.name} returned empty for ${videoId}`);
+    } catch (err) {
+      console.log(`[getTranscript] ⚠️ ${strategy.name} failed for ${videoId}: ${err.message}`);
+    }
   }
 
+  console.log(`[getTranscript] ❌ All strategies failed for ${videoId}`);
   return res.status(500).json({
-    error: 'Failed to fetch transcript. This video may not have CC subtitles.',
-    details: errors.join(' | '),
+    error: 'Failed to fetch transcript. All strategies exhausted.',
+    details: `Video ID: ${videoId}. The video may not have captions, or YouTube is blocking this server.`,
   });
 }
