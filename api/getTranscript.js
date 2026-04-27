@@ -69,7 +69,27 @@ async function fetchViaAndroid(videoId) {
   return await fetchCaptionTrack(tracks);
 }
 
-// ====== 策略二：WEB InnerTube API（加入 consent cookie 繞過 GDPR）======
+// ====== 策略二：IOS InnerTube API（Vercel 上成功率較高）======
+async function fetchViaIOS(videoId) {
+  const res = await fetch('https://www.youtube.com/youtubei/v1/player?prettyPrint=false', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'User-Agent': 'com.google.ios.youtube/20.10.38 (iPhone16,2; U; CPU iPhone OS 17_7_2 like Mac OS X)',
+    },
+    body: JSON.stringify({
+      context: { client: { clientName: 'IOS', clientVersion: '20.10.38' } },
+      videoId,
+    }),
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  const tracks = data?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
+  if (!Array.isArray(tracks) || tracks.length === 0) return null;
+  return await fetchCaptionTrack(tracks);
+}
+
+// ====== 策略三：WEB InnerTube API（加入 consent cookie 繞過 GDPR）======
 async function fetchViaWeb(videoId) {
   const res = await fetch('https://www.youtube.com/youtubei/v1/player?prettyPrint=false', {
     method: 'POST',
@@ -184,6 +204,7 @@ export default async function handler(req, res) {
 
   const strategies = [
     { name: 'Android InnerTube', fn: () => fetchViaAndroid(videoId) },
+    { name: 'IOS InnerTube', fn: () => fetchViaIOS(videoId) },
     { name: 'Web InnerTube', fn: () => fetchViaWeb(videoId) },
     { name: 'Web Page Scrape', fn: () => fetchViaWebPage(videoId) },
   ];
