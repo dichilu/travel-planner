@@ -1,5 +1,8 @@
-// --- 自訂 YouTube 字幕擷取 API (Custom YouTube Transcript Fetcher) ---
-// 不依賴第三方套件，使用多重策略繞過雲端 IP 封鎖。
+// --- 自訂 YouTube 字幕擷取 API (Edge Function 版本) ---
+// 使用 Vercel Edge Runtime，IP 範圍與一般 Serverless Function 不同，
+// 可降低被 YouTube 反爬蟲機制封鎖的機率。
+
+export const config = { runtime: 'edge' };
 
 const VIDEO_ID_REGEX = /(?:youtube\.com\/(?:[^/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?/\s]{11})/i;
 
@@ -23,13 +26,11 @@ function decodeEntities(text) {
 }
 
 function parseTranscriptXml(xml) {
-  // 嘗試新版 <p> 格式
   const pRegex = /<p\s+t="(\d+)"\s+d="(\d+)"[^>]*>([\s\S]*?)<\/p>/g;
   let results = [];
   let m;
   while ((m = pRegex.exec(xml)) !== null) {
     let text = m[3];
-    // 處理 <s> 子元素
     const sRegex = /<s[^>]*>([^<]*)<\/s>/g;
     let sText = '';
     let sMatch;
@@ -40,7 +41,6 @@ function parseTranscriptXml(xml) {
   }
   if (results.length > 0) return results.join(' ');
 
-  // 嘗試舊版 <text> 格式
   const textRegex = /<text[^>]*>([\s\S]*?)<\/text>/g;
   while ((m = textRegex.exec(xml)) !== null) {
     const text = decodeEntities(m[1].replace(/<[^>]+>/g, '')).trim();
@@ -49,7 +49,29 @@ function parseTranscriptXml(xml) {
   return results.join(' ');
 }
 
-// ====== 策略一：ANDROID InnerTube API（原版套件的方法，成功率最高）======
+async function fetchCaptionTrack(tracks) {
+  const track =
+    tracks.find(t => t.languageCode === 'zh-Hant') ||
+    tracks.find(t => t.languageCode === 'zh-TW') ||
+    tracks.find(t => t.languageCode?.startsWith('zh')) ||
+    tracks.find(t => t.vssId?.includes('.zh')) ||
+    tracks[0];
+
+  if (!track?.baseUrl) return null;
+
+  const res = await fetch(track.baseUrl, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      'Referer': 'https://www.youtube.com/',
+    },
+  });
+  if (!res.ok) return null;
+  const xml = await res.text();
+  const text = parseTranscriptXml(xml);
+  return text || null;
+}
+
+// 策略一：ANDROID InnerTube API
 async function fetchViaAndroid(videoId) {
   const res = await fetch('https://www.youtube.com/youtubei/v1/player?prettyPrint=false', {
     method: 'POST',
@@ -69,7 +91,7 @@ async function fetchViaAndroid(videoId) {
   return await fetchCaptionTrack(tracks);
 }
 
-// ====== 策略二：IOS InnerTube API（Vercel 上成功率較高）======
+// 策略二：IOS InnerTube API（Vercel Edge 上成功率較高）
 async function fetchViaIOS(videoId) {
   const res = await fetch('https://www.youtube.com/youtubei/v1/player?prettyPrint=false', {
     method: 'POST',
@@ -89,7 +111,7 @@ async function fetchViaIOS(videoId) {
   return await fetchCaptionTrack(tracks);
 }
 
-// ====== 策略三：WEB InnerTube API（加入 consent cookie 繞過 GDPR）======
+// 策略三：WEB InnerTube API（加入 consent cookie 繞過 GDPR）
 async function fetchViaWeb(videoId) {
   const res = await fetch('https://www.youtube.com/youtubei/v1/player?prettyPrint=false', {
     method: 'POST',
@@ -119,94 +141,41 @@ async function fetchViaWeb(videoId) {
   return await fetchCaptionTrack(tracks);
 }
 
-// ====== 策略三：直接爬 YouTube 網頁取得字幕軌道（加 consent cookie）======
-async function fetchViaWebPage(videoId) {
-  const res = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-      'Accept-Language': 'en-US,en;q=0.9',
-      'Cookie': 'CONSENT=PENDING+987; SOCS=CAESEwgDEgk2MjQyMjkzMTQaAmVuIAEaBgiA_LUGAQ',
-    },
-  });
-  if (!res.ok) return null;
-  const html = await res.text();
-  if (html.includes('class="g-recaptcha"')) return null;
-
-  // 從頁面中解析 ytInitialPlayerResponse
-  const marker = 'var ytInitialPlayerResponse = ';
-  const startIdx = html.indexOf(marker);
-  if (startIdx === -1) return null;
-
-  let depth = 0;
-  const jsonStart = startIdx + marker.length;
-  for (let i = jsonStart; i < html.length; i++) {
-    if (html[i] === '{') depth++;
-    else if (html[i] === '}') {
-      depth--;
-      if (depth === 0) {
-        try {
-          const playerResponse = JSON.parse(html.slice(jsonStart, i + 1));
-          const tracks = playerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
-          if (!Array.isArray(tracks) || tracks.length === 0) return null;
-          return await fetchCaptionTrack(tracks);
-        } catch { return null; }
-      }
-    }
-  }
-  return null;
-}
-
-// ====== 共用：從字幕軌道取得 XML 並解析為文字 ======
-async function fetchCaptionTrack(tracks) {
-  // 優先選中文，沒有就選第一個
-  const track =
-    tracks.find(t => t.languageCode === 'zh-Hant') ||
-    tracks.find(t => t.languageCode === 'zh-TW') ||
-    tracks.find(t => t.languageCode?.startsWith('zh')) ||
-    tracks.find(t => t.vssId?.includes('.zh')) ||
-    tracks[0];
-
-  if (!track?.baseUrl) return null;
-
-  const res = await fetch(track.baseUrl, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      'Referer': 'https://www.youtube.com/',
-    },
-  });
-  if (!res.ok) return null;
-  const xml = await res.text();
-  const text = parseTranscriptXml(xml);
-  return text || null;
-}
-
-// ====== Vercel Serverless Function Handler ======
-export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Credentials', true);
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
-
-  if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
+// ====== Edge Function Handler (使用 Web API Request/Response) ======
+export default async function handler(request) {
+  // Handle CORS preflight
+  if (request.method === 'OPTIONS') {
+    return new Response(null, {
+      status: 200,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET,OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      },
+    });
   }
 
-  const { url } = req.query;
+  const { searchParams } = new URL(request.url);
+  const url = searchParams.get('url');
+
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Content-Type': 'application/json',
+  };
+
   if (!url) {
-    return res.status(400).json({ error: 'Missing YouTube URL' });
+    return new Response(JSON.stringify({ error: 'Missing YouTube URL' }), { status: 400, headers: corsHeaders });
   }
 
   const videoId = extractVideoId(url);
   if (!videoId) {
-    return res.status(400).json({ error: 'Invalid YouTube URL' });
+    return new Response(JSON.stringify({ error: 'Invalid YouTube URL' }), { status: 400, headers: corsHeaders });
   }
 
   const strategies = [
     { name: 'Android InnerTube', fn: () => fetchViaAndroid(videoId) },
     { name: 'IOS InnerTube', fn: () => fetchViaIOS(videoId) },
     { name: 'Web InnerTube', fn: () => fetchViaWeb(videoId) },
-    { name: 'Web Page Scrape', fn: () => fetchViaWebPage(videoId) },
   ];
 
   for (const strategy of strategies) {
@@ -214,7 +183,7 @@ export default async function handler(req, res) {
       const transcript = await strategy.fn();
       if (transcript && transcript.trim().length > 0) {
         console.log(`[getTranscript] ✅ Success via ${strategy.name} for ${videoId}`);
-        return res.status(200).json({ transcript });
+        return new Response(JSON.stringify({ transcript }), { status: 200, headers: corsHeaders });
       }
       console.log(`[getTranscript] ⏭️ ${strategy.name} returned empty for ${videoId}`);
     } catch (err) {
@@ -223,8 +192,11 @@ export default async function handler(req, res) {
   }
 
   console.log(`[getTranscript] ❌ All strategies failed for ${videoId}`);
-  return res.status(500).json({
-    error: 'Failed to fetch transcript. All strategies exhausted.',
-    details: `Video ID: ${videoId}. The video may not have captions, or YouTube is blocking this server.`,
-  });
+  return new Response(
+    JSON.stringify({
+      error: 'Failed to fetch transcript. All strategies exhausted.',
+      details: `Video ID: ${videoId}. The video may not have captions, or YouTube is blocking this server.`,
+    }),
+    { status: 500, headers: corsHeaders }
+  );
 }
