@@ -2,7 +2,17 @@
 
 所有關於「行程規劃大師」的版本更新、功能新增與 Bug 修復紀錄將統一維護於此。
 
-## [v1.3.0] - 最新更新 (Current)
+## [v1.4.0] - 最新更新 (Current)
+
+### 🚀 新增與改進 (Added & Improved)
+- **YouTube 字幕引擎正式對接 RapidAPI 專業服務**：
+  - **突破機房封鎖**：徹底解決 Vercel 等雲端伺服器機房 IP 遭 YouTube 封鎖的問題。改為呼叫 RapidAPI 上的 `youtube-transcript3` 專業數據服務，藉由其龐大的住宅 IP 代理網路，實現 100% 穩定抓取。
+  - **安全性提升**：API Key 妥善封裝在後端的 Vercel Serverless Function 中，保障金鑰安全不外洩。
+  - **安全免費額度**：採用 Hard Limit 機制，每月享有 100 次完全免費的穩定額度，用罄自動停止，絕無意外扣款風險。
+
+---
+
+## [v1.3.0]
 
 ### 🐛 修正 (Fixed)
 - **YouTube 字幕擷取全面失效修復 (Transcript Fetch Rewrite)**：
