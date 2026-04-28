@@ -1185,7 +1185,7 @@ export default function App() {
               <div className="bg-white/90 backdrop-blur-2xl p-8 md:p-10 rounded-[2.5rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.3)] border border-white h-full">
                 <h3 className="text-xl font-black text-slate-800 flex items-center gap-3 mb-6"><PlaneTakeoff className="w-6 h-6 text-blue-600" /> {t.step2Title}</h3>
                 <div className="grid grid-cols-1 auto-rows-max gap-6">
-                <div className={`h-[340px] p-6 rounded-[1.5rem] border-2 transition-all flex flex-col justify-center ${(editFlightData.outName.trim() || editFlightData.inName.trim()) ? 'border-blue-500 bg-blue-50 shadow-lg ring-4 ring-blue-500/20' : 'border-slate-200 bg-white'}`}>
+                <div className={`h-auto md:h-[340px] p-6 rounded-[1.5rem] border-2 transition-all flex flex-col justify-center ${(editFlightData.outName.trim() || editFlightData.inName.trim()) ? 'border-blue-500 bg-blue-50 shadow-lg ring-4 ring-blue-500/20' : 'border-slate-200 bg-white'}`}>
                   <h4 className="text-sm font-bold text-slate-700 mb-4 flex items-center gap-2">
                     <PlaneTakeoff className="w-4 h-4 text-blue-500" /> 
                     {lang === 'zh-TW' ? '自選航班編號 (選填)' : (lang === 'ja' ? 'カスタムフライト番号 (任意)' : 'Custom Flight Number (Optional)')}
@@ -1247,7 +1247,7 @@ export default function App() {
                        setEditFlightData({ outName: '', outDep: '', outArr: '', inName: '', inDep: '', inArr: '' });
                        setCustomOutboundFlight('');
                        setCustomInboundFlight('');
-                    }} className={`h-[260px] p-6 rounded-[1.5rem] border-2 cursor-pointer transition-all flex flex-col justify-between ${isFlightHighlighted ? 'border-blue-500 bg-blue-50 shadow-lg ring-4 ring-blue-500/20' : 'border-slate-200 hover:border-blue-300 bg-white hover:shadow-md'}`}>
+                    }} className={`h-auto md:h-[260px] p-6 rounded-[1.5rem] border-2 cursor-pointer transition-all flex flex-col justify-between ${isFlightHighlighted ? 'border-blue-500 bg-blue-50 shadow-lg ring-4 ring-blue-500/20' : 'border-slate-200 hover:border-blue-300 bg-white hover:shadow-md'}`}>
                       <div className="flex justify-between items-center mb-4">
                         <span className="font-black text-slate-800 text-lg">{renderText(flight.airline)}</span>
                       </div>
