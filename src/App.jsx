@@ -657,6 +657,10 @@ export default function App() {
          Fill the gaps with your own expert knowledge to make a seamless, realistic itinerary.
          CRITICAL RULE: If you successfully include a spot or restaurant inspired by the YouTube Transcript, YOU MUST EXPLICITLY state this in its 'expertReason' field AND explain why it passed your LLM judgment (e.g., "根據您提供的 YouTube 影片推薦，經過評估，這家高 CP 值小吃完美符合您的【背包客】預算設定...").
 
+      10. ENERGY TAPERING ENGINE (體力遞減原則): Human energy is highest at the start of the trip and declines daily. 
+          - Plan geographically distant, highly physical, or extensive outdoor walking spots (e.g., hiking, theme parks, large regional travel) in the FIRST HALF of the trip.
+          - Taper the physical intensity down towards the END of the trip by introducing relaxed indoor activities, shopping, cafes, or short-range city center strolling. Make the final days significantly more leisurely.
+
       --- 🛑 BOUNDARY EVENTS 🛑 ---
       1. Day 1, Activity 1 MUST be type="transit". The location MUST be "從家中出發前往機場". Calculate a time exactly 3 hours prior to the flight time (${flightOutboundTime}). The 'detailedInstruction' MUST mention taking the Outbound Flight (${flightNameOnlyOutbound}).
       2. Day 1, Activity 2 MUST be type="transit" representing the realistic journey from the destination airport to the Hotel (${finalHotelStr}). IMPORTANT: You MUST calculate a time 1 to 1.5 hours AFTER the flight landing time to account for immigration and customs clearance before starting this journey!
