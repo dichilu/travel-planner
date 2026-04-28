@@ -666,6 +666,7 @@ export default function App() {
       2. Day 1, Activity 2 MUST be type="transit" representing the realistic journey from the destination airport to the Hotel (${finalHotelStr}). IMPORTANT: You MUST calculate a time 1 to 1.5 hours AFTER the flight landing time to account for immigration and customs clearance before starting this journey!
       3. The SECOND TO LAST activity on the LAST day MUST be type="transit" representing the realistic journey from Hotel/City to the destination airport.
       4. The LAST activity on the LAST day MUST be type="transit" representing taking the Inbound Flight (Flight: ${flightNameOnlyInbound}, Time: ${flightInboundTime}) and returning home.
+      5. FOR ALL DAYS EXCEPT THE LAST DAY: The very LAST activity of the day MUST be type="hotel" or "transit" representing returning to the user's designated Hotel (${finalHotelStr}) and checking in or resting. Never end a day at a restaurant or attraction.
       
       JSON SCHEMA TO FOLLOW:
       {
