@@ -908,13 +908,23 @@ export default function App() {
   };
 
   const handleDownloadPDF = () => {
+    const element = pdfRef.current;
+    if (!element) return;
+
+    // 瀏覽器 canvas 有高度限制 (通常約 16000px ~ 32767px)
+    // 如果行程過長 (大於 15000px)，使用 html2canvas 會繪製失敗，導致 PDF 全白。
+    if (element.scrollHeight > 15000) {
+      alert(lang === 'zh-TW' ? "您的行程內容較長，直接匯出 PDF 可能會受限於瀏覽器繪圖限制而產生空白頁。\n\n系統即將呼叫瀏覽器的列印功能，請在列印目標選擇「另存為 PDF」。" : "Your itinerary is too long for direct PDF generation and may result in blank pages due to browser limitations.\n\nThe system will now open the browser's print dialog. Please select 'Save as PDF'.");
+      window.print();
+      return;
+    }
+
     setIsPdfLoading(true);
     const script = document.createElement('script');
     script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
     document.body.appendChild(script);
     
     script.onload = () => {
-      const element = pdfRef.current;
       const opt = {
         margin:       [0.5, 0, 0.5, 0],
         filename:     `${formData.destCity}_Itinerary.pdf`,
