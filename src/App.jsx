@@ -551,7 +551,6 @@ export default function App() {
   const handleGenerateItinerary = async () => {
     setErrorMsg('');
     const cf = logisticsData.flightOptions[selectedFlight], ch = logisticsData.hotelOptions[selectedHotel];
-<<<<<<< HEAD
     
     let finalOutbound = customOutboundFlight.trim();
     let finalInbound = customInboundFlight.trim();
