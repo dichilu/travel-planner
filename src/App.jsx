@@ -551,6 +551,7 @@ export default function App() {
   const handleGenerateItinerary = async () => {
     setErrorMsg('');
     const cf = logisticsData.flightOptions[selectedFlight], ch = logisticsData.hotelOptions[selectedHotel];
+<<<<<<< HEAD
     
     let finalOutbound = customOutboundFlight.trim();
     let finalInbound = customInboundFlight.trim();
@@ -626,7 +627,7 @@ export default function App() {
     const flightOutboundTime = finalOutbound ? (editFlightData.outDep || "08:00") : cf.outbound;
     const flightInboundTime = finalInbound ? (editFlightData.inDep || "18:00") : cf.inbound;
 
-    const prompt = `${getDepartureStr()} to ${getDestinationStr()} (${calculateDays()} days). Pace: ${formData.pace}. Styles: ${formData.why.join(' AND ')}. Budget: ${formData.budget}. Transit: ${formData.transit}. Flight: ${finalFlightStr}. Hotel: ${finalHotelStr}.${transcriptData ? `\nYouTube Transcript Inspiration: ${transcriptData}` : ''}`;
+    const prompt = `${getDepartureStr()} to ${getDestinationStr()} from ${formData.dateFrom} to ${formData.dateTo} (${calculateDays()} days). Pace: ${formData.pace}. Styles: ${formData.why.join(' AND ')}. Budget: ${formData.budget}. Transit: ${formData.transit}. Special Notes: ${formData.special}. Flight: ${finalFlightStr}. Hotel: ${finalHotelStr}.${transcriptData ? `\nYouTube Transcript Inspiration: ${transcriptData}` : ''}`;
     
     // 🚀 核心大腦升級: 加入營業時間誠實條款 (Honest Operating Hours)
     const sysInst = `You are an elite, practical Local Expert Tour Guide. Output STRICT JSON. 
@@ -662,7 +663,7 @@ export default function App() {
           - Taper the physical intensity down towards the END of the trip by introducing relaxed indoor activities, shopping, cafes, or short-range city center strolling. Make the final days significantly more leisurely.
 
       --- 🛑 BOUNDARY EVENTS 🛑 ---
-      1. Day 1, Activity 1 MUST be type="transit". The location MUST be "從家中出發前往機場". Calculate a time exactly 3 hours prior to the flight time (${flightOutboundTime}). The 'detailedInstruction' MUST mention taking the Outbound Flight (${flightNameOnlyOutbound}).
+      1. Day 1 MUST be exactly on ${formData.dateFrom}. Activity 1 MUST be type="transit". The location MUST be "從家中出發前往機場". Calculate a time exactly 3 hours prior to the flight time (${flightOutboundTime}). The 'detailedInstruction' MUST mention taking the Outbound Flight (${flightNameOnlyOutbound}).
       2. Day 1, Activity 2 MUST be type="transit" representing the realistic journey from the destination airport to the Hotel (${finalHotelStr}). IMPORTANT: You MUST calculate a time 1 to 1.5 hours AFTER the flight landing time to account for immigration and customs clearance before starting this journey!
       3. The SECOND TO LAST activity on the LAST day MUST be type="transit" representing the realistic journey from Hotel/City to the destination airport.
       4. The LAST activity on the LAST day MUST be type="transit" representing taking the Inbound Flight (Flight: ${flightNameOnlyInbound}, Time: ${flightInboundTime}) and returning home.
