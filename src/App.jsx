@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 
 // --- 全域應用程式版號 ---
-const APP_VERSION = "v1.28.0 - 營業時間防呆與誠實 Prompt (Operating Hours Disclaimer)";
+const APP_VERSION = "v1.4.0 - YouTube 字幕引擎與體力遞減原則";
 
 const bgImages = {
   "Taiwan": "https://images.unsplash.com/photo-1504233529578-6d46baba6d3f?q=80&w=2000&auto=format&fit=crop",
