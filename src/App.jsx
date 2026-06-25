@@ -286,15 +286,7 @@ const renderText = (val) => {
 const loadSavedState = () => {
   try {
     const saved = localStorage.getItem('itinerary_master_state');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      // 防止重整後卡在載入狀態，將載入中的 step 退回上一步，並保留所有快取資料
-      if (parsed.step === 2) parsed.step = 1;
-      if (parsed.step === 4) {
-        parsed.step = parsed.itinerary ? 5 : 3;
-      }
-      return parsed;
-    }
+    if (saved) return JSON.parse(saved);
   } catch (e) {}
   return null;
 };
