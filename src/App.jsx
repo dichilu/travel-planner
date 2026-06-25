@@ -286,7 +286,11 @@ const renderText = (val) => {
 const loadSavedState = () => {
   try {
     const saved = localStorage.getItem('itinerary_master_state');
-    if (saved) return JSON.parse(saved);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed.loading) parsed.loading = false; // 防止重整後仍卡在載入狀態
+      return parsed;
+    }
   } catch (e) {}
   return null;
 };
