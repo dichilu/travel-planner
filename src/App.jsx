@@ -373,6 +373,7 @@ export default function App() {
   const [swappingNode, setSwappingNode] = useState(null);
   const [deletingNode, setDeletingNode] = useState(null);
   const [swapMenuOpenFor, setSwapMenuOpenFor] = useState(null); 
+  const [swapDayMenuOpenFor, setSwapDayMenuOpenFor] = useState(null);
   const [showCustomInputFor, setShowCustomInputFor] = useState(null); 
   const [customSwapText, setCustomSwapText] = useState(''); 
 
@@ -891,6 +892,79 @@ export default function App() {
       setSwappingNode(null);
       setDeletingNode(null); 
     }
+  };
+
+  // --- 【天數交換 (Day Swap) 引擎】 ---
+  const handleSwapDays = (idxA, idxB) => {
+    setSwapDayMenuOpenFor(null);
+    const newItin = { ...itinerary };
+    const dayA = JSON.parse(JSON.stringify(newItin.dailyPlan[idxA]));
+    const dayB = JSON.parse(JSON.stringify(newItin.dailyPlan[idxB]));
+
+    // 擷取第一天與最後一天的邊界節點
+    const isDayAFirst = idxA === 0;
+    const isDayALast = idxA === newItin.dailyPlan.length - 1;
+    const isDayBFirst = idxB === 0;
+    const isDayBLast = idxB === newItin.dailyPlan.length - 1;
+
+    // 輔助函數：分離邊界節點與核心節點
+    const splitNodes = (day, isFirst, isLast) => {
+      let head = [];
+      let core = [...day.activities];
+      let tail = [];
+      
+      if (isFirst) {
+        head = core.splice(0, 2); // 取出前兩個: 住家到機場、機場到飯店
+      }
+      if (isLast) {
+        tail = core.splice(-2, 2); // 取出最後兩個: 飯店到機場、機場到家
+      }
+      // 不管是不是第一天最後一天，每天的最後一個核心節點一定是回飯店 (hotel or transit)
+      // 如果那不是在 tail 裡面，我們也要確定不會搞亂。不過根據 Prompt，每天最後一個核心節點都是回飯店，直接跟著 core 交換即可。
+      return { head, core, tail };
+    };
+
+    const partsA = splitNodes(dayA, isDayAFirst, isDayALast);
+    const partsB = splitNodes(dayB, isDayBFirst, isDayBLast);
+
+    // 交換核心節點與主題 (日期與 Day 序號保留原本的)
+    const newCoreA = partsB.core;
+    const newCoreB = partsA.core;
+    const newThemeA = dayB.theme;
+    const newThemeB = dayA.theme;
+
+    // 重新計算起訖時間 (讓核心行程配合原本該天的起步時間)
+    // 如果是第一天，出發時間是從到達飯店後開始
+    const getStartTime = (parts, isFirst) => {
+      if (isFirst && parts.head.length === 2) {
+        return parts.head[1].actualEndTime || parts.head[1].time || "14:00"; // 抵達飯店的時間
+      }
+      return "09:00"; // 預設 09:00 出門
+    };
+
+    const shiftCoreTimes = (core, baseStartTime) => {
+      if (core.length === 0) return core;
+      let currentMins = timeToMins(baseStartTime);
+      const originalFirstCoreMins = timeToMins(core[0].time);
+      const diffMins = currentMins - originalFirstCoreMins;
+      
+      return core.map(act => {
+        const newAct = { ...act };
+        if (newAct.time) newAct.time = minsToTime(timeToMins(newAct.time) + diffMins);
+        if (newAct.actualEndTime) newAct.actualEndTime = minsToTime(timeToMins(newAct.actualEndTime) + diffMins);
+        return newAct;
+      });
+    };
+
+    const shiftedCoreA = shiftCoreTimes(newCoreA, getStartTime(partsA, isDayAFirst));
+    const shiftedCoreB = shiftCoreTimes(newCoreB, getStartTime(partsB, isDayBFirst));
+
+    newItin.dailyPlan[idxA].activities = [...partsA.head, ...shiftedCoreA, ...partsA.tail];
+    newItin.dailyPlan[idxB].activities = [...partsB.head, ...shiftedCoreB, ...partsB.tail];
+    newItin.dailyPlan[idxA].theme = newThemeA;
+    newItin.dailyPlan[idxB].theme = newThemeB;
+
+    setItinerary(newItin);
   };
 
   // --- 【一鍵自動同步引擎 (Auto-Sync Domino Engine)】 ---
@@ -1573,6 +1647,26 @@ export default function App() {
                           <p className="text-indigo-200 font-bold text-xs md:text-sm tracking-widest print:text-slate-500 uppercase">{day.date}</p>
                           <h3 className="font-black text-white text-2xl md:text-3xl tracking-tight mt-1 print:text-slate-900">{renderText(day.theme)}</h3>
                         </div>
+                      </div>
+                      <div className="relative print:hidden">
+                        <button onClick={() => setSwapDayMenuOpenFor(swapDayMenuOpenFor === idx ? null : idx)} className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-indigo-300 hover:text-white px-4 py-2.5 rounded-xl border border-slate-700 hover:border-indigo-400 transition-colors font-bold text-sm shadow-sm">
+                          <RefreshCw className="w-4 h-4" /> 交換天數
+                        </button>
+                        {swapDayMenuOpenFor === idx && (
+                          <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2">
+                            <div className="p-2 text-xs font-bold text-slate-400 border-b border-slate-100 uppercase tracking-wider text-center bg-slate-50">與哪一天交換？</div>
+                            <div className="max-h-48 overflow-y-auto p-1">
+                              {itinerary.dailyPlan.map((d, dIdx) => (
+                                dIdx !== idx && (
+                                  <button key={dIdx} onClick={() => handleSwapDays(idx, dIdx)} className="w-full text-left px-4 py-3 text-sm font-bold text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 rounded-xl transition-colors flex items-center gap-2">
+                                    <span className="bg-slate-100 text-slate-500 w-6 h-6 rounded flex items-center justify-center text-xs">D{d.day}</span>
+                                    {renderText(d.theme).substring(0, 10)}...
+                                  </button>
+                                )
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                     
