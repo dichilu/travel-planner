@@ -788,11 +788,16 @@ export default function App() {
       if (!response.ok || !data.id) throw new Error(data.error || 'Failed');
       
       const shareUrl = `${window.location.origin}${window.location.pathname}?share=${data.id}`;
-      await navigator.clipboard.writeText(shareUrl);
-      alert(t.shareSuccess);
+      try {
+        await navigator.clipboard.writeText(shareUrl);
+        alert(t.shareSuccess);
+      } catch (clipErr) {
+        // Fallback for clipboard
+        prompt('✅ 專屬連結已產生，請手動複製以下網址：', shareUrl);
+      }
     } catch (e) {
       console.error(e);
-      alert(t.shareFail);
+      alert(`${t.shareFail}\n\n[錯誤細節]: ${e.message}\n(如果您是在本機 localhost 測試，可能是因為還沒有設定資料庫金鑰。請至線上正式版網站測試！)`);
     } finally {
       setIsSharing(false);
     }
