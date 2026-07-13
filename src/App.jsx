@@ -6,7 +6,6 @@ import {
   Car, Info, CheckCircle2, Map, Sparkles, ArrowRight, Clock,
   Globe, Trash2, RefreshCw, Download, Check, MapPinned, X, Edit2, AlertTriangle, Share2
 } from 'lucide-react';
-import LZString from 'lz-string';
 
 // --- 全域應用程式版號 ---
 const APP_VERSION = "v1.4.0 - YouTube 字幕引擎與體力遞減原則";
@@ -295,20 +294,6 @@ const renderText = (val) => {
 
 const loadSavedState = () => {
   try {
-    const urlParams = new URLSearchParams(window.location.search);
-    const shareData = urlParams.get('share');
-    if (shareData) {
-      const decompressed = LZString.decompressFromEncodedURIComponent(shareData);
-      if (decompressed) {
-        const parsedState = JSON.parse(decompressed);
-        window.history.replaceState({}, document.title, window.location.pathname);
-        return parsedState;
-      }
-    }
-  } catch (e) {
-    console.error("Invalid share link", e);
-  }
-  try {
     const saved = localStorage.getItem('itinerary_master_state');
     if (saved) return JSON.parse(saved);
   } catch (e) {}
@@ -370,6 +355,7 @@ export default function App() {
   const [isPdfLoading, setIsPdfLoading] = useState(false);
   const [isValidatingInputs, setIsValidatingInputs] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
+  const [isFetchingShared, setIsFetchingShared] = useState(!!new URLSearchParams(window.location.search).get('share'));
   
   const [logisticsData, setLogisticsData] = useState(savedState?.logisticsData || null);
   const [selectedFlight, setSelectedFlight] = useState(savedState?.selectedFlight || 0);
@@ -391,9 +377,43 @@ export default function App() {
   const [customSwapText, setCustomSwapText] = useState(''); 
 
   useEffect(() => {
-    const stateToSave = { lang, formData, step, logisticsData, selectedFlight, selectedHotel, customOutboundFlight, customInboundFlight, customHotel, customHotelCity, itinerary };
-    localStorage.setItem('itinerary_master_state', JSON.stringify(stateToSave));
-  }, [lang, formData, step, logisticsData, selectedFlight, selectedHotel, customOutboundFlight, customInboundFlight, customHotel, customHotelCity, itinerary]);
+    const urlParams = new URLSearchParams(window.location.search);
+    const shareId = urlParams.get('share');
+    if (shareId) {
+      setIsFetchingShared(true);
+      fetch(`/api/getItinerary?id=${shareId}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data && !data.error) {
+            if (data.lang) setLang(data.lang);
+            if (data.formData) setFormData(data.formData);
+            if (data.step) setStep(data.step);
+            if (data.logisticsData) setLogisticsData(data.logisticsData);
+            if (data.selectedFlight !== undefined) setSelectedFlight(data.selectedFlight);
+            if (data.selectedHotel !== undefined) setSelectedHotel(data.selectedHotel);
+            if (data.customOutboundFlight !== undefined) setCustomOutboundFlight(data.customOutboundFlight);
+            if (data.customInboundFlight !== undefined) setCustomInboundFlight(data.customInboundFlight);
+            if (data.customHotel !== undefined) setCustomHotel(data.customHotel);
+            if (data.customHotelCity !== undefined) setCustomHotelCity(data.customHotelCity);
+            if (data.itinerary) setItinerary(data.itinerary);
+          } else {
+            console.error('Failed to load shared itinerary:', data.error);
+          }
+        })
+        .catch(err => console.error(err))
+        .finally(() => {
+          window.history.replaceState({}, document.title, window.location.pathname);
+          setIsFetchingShared(false);
+        });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isFetchingShared) {
+      const stateToSave = { lang, formData, step, logisticsData, selectedFlight, selectedHotel, customOutboundFlight, customInboundFlight, customHotel, customHotelCity, itinerary };
+      localStorage.setItem('itinerary_master_state', JSON.stringify(stateToSave));
+    }
+  }, [lang, formData, step, logisticsData, selectedFlight, selectedHotel, customOutboundFlight, customInboundFlight, customHotel, customHotelCity, itinerary, isFetchingShared]);
 
   const handleReset = () => {
     if(step === 1 && !itinerary && !logisticsData) return;
@@ -759,11 +779,19 @@ export default function App() {
     setIsSharing(true);
     try {
       const stateToShare = { lang, formData, step, logisticsData, selectedFlight, selectedHotel, customOutboundFlight, customInboundFlight, customHotel, customHotelCity, itinerary };
-      const compressed = LZString.compressToEncodedURIComponent(JSON.stringify(stateToShare));
-      const shareUrl = `${window.location.origin}${window.location.pathname}?share=${compressed}`;
+      const response = await fetch('/api/saveItinerary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(stateToShare)
+      });
+      const data = await response.json();
+      if (!response.ok || !data.id) throw new Error(data.error || 'Failed');
+      
+      const shareUrl = `${window.location.origin}${window.location.pathname}?share=${data.id}`;
       await navigator.clipboard.writeText(shareUrl);
       alert(t.shareSuccess);
     } catch (e) {
+      console.error(e);
       alert(t.shareFail);
     } finally {
       setIsSharing(false);
@@ -1019,6 +1047,15 @@ export default function App() {
     const loc = itinerary.dailyPlan[dayIdx].activities[actIdx - 1].location;
     return typeof loc === 'object' ? (loc.name || JSON.stringify(loc)) : loc;
   };
+
+  if (isFetchingShared) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-4">
+        <Loader2 className="w-12 h-12 animate-spin text-indigo-500" />
+        <p className="text-slate-600 font-bold tracking-widest animate-pulse">載入專屬行程中 / Loading Shared Itinerary...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen font-sans relative selection:bg-pink-200">
