@@ -1107,10 +1107,17 @@ export default function App() {
     const currentLocObj = activities[actIdx].location;
     const currentLoc = typeof currentLocObj === 'object' ? (currentLocObj.name || '') : currentLocObj;
 
-    if (dayIdx === 0 && actIdx === 1) origin = `${formData.destCity.split(' (')[0]} Airport`; 
-    else if (actIdx === 0) origin = hotelName;
-    else {
-       const prevLocObj = activities[actIdx - 1].location;
+    let prevIdx = actIdx - 1;
+    while (prevIdx > 0 && activities[prevIdx].type === 'freetime') {
+      prevIdx--;
+    }
+
+    if (dayIdx === 0 && prevIdx === 0) {
+      origin = `${formData.destCity.split(' (')[0]} Airport`; 
+    } else if (prevIdx < 0 || (prevIdx === 0 && activities[0].type === 'freetime')) {
+      origin = hotelName;
+    } else {
+       const prevLocObj = activities[prevIdx].location;
        origin = typeof prevLocObj === 'object' ? (prevLocObj.name || '') : prevLocObj;
     }
 
@@ -1121,9 +1128,18 @@ export default function App() {
   };
 
   const getOriginText = (dayIdx, actIdx) => {
-    if (dayIdx === 0 && actIdx === 1) return t.fromAirport;
     if (actIdx === 0) return t.fromHotel;
-    const loc = itinerary.dailyPlan[dayIdx].activities[actIdx - 1].location;
+    const activities = itinerary.dailyPlan[dayIdx].activities;
+    
+    let prevIdx = actIdx - 1;
+    while (prevIdx > 0 && activities[prevIdx].type === 'freetime') {
+      prevIdx--;
+    }
+
+    if (dayIdx === 0 && prevIdx === 0) return t.fromAirport;
+    if (prevIdx < 0 || (prevIdx === 0 && activities[0].type === 'freetime')) return t.fromHotel;
+    
+    const loc = activities[prevIdx].location;
     return typeof loc === 'object' ? (loc.name || JSON.stringify(loc)) : loc;
   };
 
