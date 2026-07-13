@@ -4,8 +4,9 @@ import {
   Bed, Train, Coffee, Printer, ExternalLink, AlertCircle, 
   Compass, Ticket, Loader2, Navigation, Image as ImageIcon,
   Car, Info, CheckCircle2, Map, Sparkles, ArrowRight, Clock,
-  Globe, Trash2, RefreshCw, Download, Check, MapPinned, X, Edit2, AlertTriangle
+  Globe, Trash2, RefreshCw, Download, Check, MapPinned, X, Edit2, AlertTriangle, Share2
 } from 'lucide-react';
+import LZString from 'lz-string';
 
 // --- 全域應用程式版號 ---
 const APP_VERSION = "v1.4.0 - YouTube 字幕引擎與體力遞減原則";
@@ -62,6 +63,9 @@ const LOCALES_DICT = {
     dailyPlan: '大師深度導覽行程',
     reselect: '← 重新選擇機加酒',
     print: '下載為 PDF',
+    share: '複製專屬連結',
+    shareSuccess: '✅ 專屬連結已複製！快分享給朋友吧！',
+    shareFail: '❌ 複製失敗，請手動複製網址。',
     outbound: '去程',
     inbound: '回程',
     flightGoogle: '前往 Google Flights 查價',
@@ -139,6 +143,9 @@ const LOCALES_DICT = {
     dailyPlan: 'Master Deep Itinerary',
     reselect: '← Reselect Logistics',
     print: 'Download PDF',
+    share: 'Copy Share Link',
+    shareSuccess: '✅ Share link copied to clipboard!',
+    shareFail: '❌ Failed to copy, please copy the URL manually.',
     outbound: 'Outbound',
     inbound: 'Return',
     flightGoogle: 'Check on Google Flights',
@@ -216,6 +223,9 @@ const LOCALES_DICT = {
     dailyPlan: '達人のディープ旅程表',
     reselect: '← フライト・ホテルを再選擇',
     print: 'PDFをダウンロード',
+    share: '共有リンクをコピー',
+    shareSuccess: '✅ 共有リンクをコピーしました！',
+    shareFail: '❌ コピーに失敗しました。手動でURLをコピーしてください。',
     outbound: '往路',
     inbound: '復路',
     flightGoogle: 'Google Flightsで確認',
@@ -285,6 +295,20 @@ const renderText = (val) => {
 
 const loadSavedState = () => {
   try {
+    const urlParams = new URLSearchParams(window.location.search);
+    const shareData = urlParams.get('share');
+    if (shareData) {
+      const decompressed = LZString.decompressFromEncodedURIComponent(shareData);
+      if (decompressed) {
+        const parsedState = JSON.parse(decompressed);
+        window.history.replaceState({}, document.title, window.location.pathname);
+        return parsedState;
+      }
+    }
+  } catch (e) {
+    console.error("Invalid share link", e);
+  }
+  try {
     const saved = localStorage.getItem('itinerary_master_state');
     if (saved) return JSON.parse(saved);
   } catch (e) {}
@@ -345,6 +369,7 @@ export default function App() {
   const [errorMsg, setErrorMsg] = useState('');
   const [isPdfLoading, setIsPdfLoading] = useState(false);
   const [isValidatingInputs, setIsValidatingInputs] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
   
   const [logisticsData, setLogisticsData] = useState(savedState?.logisticsData || null);
   const [selectedFlight, setSelectedFlight] = useState(savedState?.selectedFlight || 0);
@@ -727,6 +752,21 @@ export default function App() {
       setTimeout(() => {
         setDeletingNode(current => current === nodeKey ? null : current);
       }, 3000);
+    }
+  };
+
+  const handleShare = async () => {
+    setIsSharing(true);
+    try {
+      const stateToShare = { lang, formData, step, logisticsData, selectedFlight, selectedHotel, customOutboundFlight, customInboundFlight, customHotel, customHotelCity, itinerary };
+      const compressed = LZString.compressToEncodedURIComponent(JSON.stringify(stateToShare));
+      const shareUrl = `${window.location.origin}${window.location.pathname}?share=${compressed}`;
+      await navigator.clipboard.writeText(shareUrl);
+      alert(t.shareSuccess);
+    } catch (e) {
+      alert(t.shareFail);
+    } finally {
+      setIsSharing(false);
     }
   };
 
@@ -1332,9 +1372,14 @@ export default function App() {
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-8">
             <div className="flex flex-wrap justify-between items-center gap-4 print:hidden px-2">
               <button onClick={() => setStep(3)} className="text-white font-bold hover:text-blue-100 flex items-center gap-2 bg-slate-900/50 px-5 py-2.5 rounded-xl backdrop-blur-md border border-white/20 shadow-sm transition-colors">{t.reselect}</button>
-              <button onClick={handleDownloadPDF} disabled={isPdfLoading} className="bg-slate-900 hover:bg-black text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-2 text-sm font-bold transition-all hover:-translate-y-0.5 disabled:opacity-50 border border-slate-700">
-                {isPdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} {t.print}
-              </button>
+              <div className="flex items-center gap-3">
+                <button onClick={handleShare} disabled={isSharing} className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-3 rounded-xl shadow-lg flex items-center gap-2 text-sm font-bold transition-all hover:-translate-y-0.5 disabled:opacity-50 border border-indigo-500">
+                  {isSharing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Share2 className="w-4 h-4" />} {t.share}
+                </button>
+                <button onClick={handleDownloadPDF} disabled={isPdfLoading} className="bg-slate-900 hover:bg-black text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-2 text-sm font-bold transition-all hover:-translate-y-0.5 disabled:opacity-50 border border-slate-700">
+                  {isPdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} {t.print}
+                </button>
+              </div>
             </div>
 
             <div ref={pdfRef} className="space-y-8 print:bg-white print:p-0">
